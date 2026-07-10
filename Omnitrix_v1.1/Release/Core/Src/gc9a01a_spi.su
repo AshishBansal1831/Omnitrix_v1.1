@@ -1,0 +1,29 @@
+../Core/Src/gc9a01a_spi.cpp:207:6:void GC9A01A::cs_low()	0	static
+../Core/Src/gc9a01a_spi.cpp:216:6:void GC9A01A::cs_high()	0	static
+../Core/Src/gc9a01a_spi.cpp:225:6:void GC9A01A::dc_cmd()	0	static
+../Core/Src/gc9a01a_spi.cpp:234:6:void GC9A01A::dc_data()	0	static
+../Core/Src/gc9a01a_spi.cpp:243:6:void GC9A01A::write_cmd(uint8_t)	16	static
+../Core/Src/gc9a01a_spi.cpp:259:6:void GC9A01A::write_data(const uint8_t*, size_t)	16	static
+../Core/Src/gc9a01a_spi.cpp:278:6:void GC9A01A::set_window(uint16_t, uint16_t, uint16_t, uint16_t)	32	static
+../Core/Src/gc9a01a_spi.cpp:303:6:void GC9A01A::begin_write()	16	static
+../Core/Src/gc9a01a_spi.cpp:318:6:void GC9A01A::write_color(uint16_t, uint32_t)	4	static
+../Core/Src/gc9a01a_spi.cpp:352:6:void GC9A01A::draw_pixel(uint16_t, uint16_t, uint16_t)	32	static
+../Core/Src/gc9a01a_spi.cpp:546:26:GC9A01A::draw_circle(int16_t, int16_t, int16_t, uint16_t)::<lambda(int16_t, int16_t)>	24	static
+../Core/Src/gc9a01a_spi.cpp:369:6:void GC9A01A::draw_fast_hline(uint16_t, uint16_t, uint16_t, uint16_t)	32	static
+../Core/Src/gc9a01a_spi.cpp:588:27:GC9A01A::fill_circle(int16_t, int16_t, int16_t, uint16_t)::<lambda(int16_t, int16_t)>::<lambda(int16_t, int16_t, int16_t)>	16	static
+../Core/Src/gc9a01a_spi.cpp:393:6:void GC9A01A::draw_fast_vline(uint16_t, uint16_t, uint16_t, uint16_t)	32	static
+../Core/Src/gc9a01a_spi.cpp:473:6:void GC9A01A::fill_rect(uint16_t, uint16_t, uint16_t, uint16_t, uint16_t)	48	static
+../Core/Src/gc9a01a_spi.cpp:332:6:void GC9A01A::fill_screen(uint16_t)	16	static
+../Core/Src/gc9a01a_spi.cpp:37:6:void GC9A01A::init()	192	static
+../Core/Src/gc9a01a_spi.cpp:516:6:void GC9A01A::draw_line(uint16_t, uint16_t, uint16_t, uint16_t, uint16_t)	64	static
+../Core/Src/gc9a01a_spi.cpp:541:6:void GC9A01A::draw_circle(int16_t, int16_t, int16_t, uint16_t)	40	static
+../Core/Src/gc9a01a_spi.cpp:580:6:void GC9A01A::fill_circle(int16_t, int16_t, int16_t, uint16_t)	56	static
+../Core/Src/gc9a01a_spi.cpp:628:6:void GC9A01A::fill_triangle(uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t)	64	static
+../Core/Src/gc9a01a_spi.cpp:662:6:void GC9A01A::benchmark_write_color()	536	dynamic,bounded
+../Core/Src/gc9a01a_spi.cpp:757:6:void GC9A01A::draw_font5x7(uint16_t, uint16_t, char, uint16_t)	104	static
+../Core/Src/gc9a01a_spi.cpp:782:6:void GC9A01A::draw_bitmap(uint16_t, uint16_t, const uint16_t*, uint16_t, uint16_t)	40	static
+../Core/Src/gc9a01a_spi.cpp:793:6:void GC9A01A::draw_bitmap(uint16_t, uint16_t, const Bitmap_t&)	16	static
+../Core/Src/gc9a01a_spi.cpp:800:6:void GC9A01A::draw_bitmap(uint8_t, const Bitmap_t&)	24	static
+../Core/Src/gc9a01a_spi.cpp:828:6:void GC9A01A::draw_bitmap_1bit(uint16_t, uint16_t, const uint8_t*, uint16_t, uint16_t, uint16_t, uint16_t)	72	static
+../Core/Src/gc9a01a_spi.cpp:868:6:void GC9A01A::draw_triangle(uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t)	48	static
+../Core/Src/gc9a01a_spi.cpp:881:6:void GC9A01A::dma_send(uint8_t*, uint32_t)	4	static

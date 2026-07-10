@@ -1,0 +1,8 @@
+../Core/Src/InterfaceIO.cpp:37:6:virtual void UartIO::write_byte(uint8_t)	2
+../Core/Src/InterfaceIO.cpp:46:6:virtual void UartIO::write_buffer(uint8_t*, uint16_t)	2
+../Core/Src/InterfaceIO.cpp:30:9:virtual uint8_t UartIO::receive_byte()	1
+../Core/Src/InterfaceIO.cpp:65:9:virtual uint8_t UsbCdcIO::receive_byte()	2
+../Core/Src/InterfaceIO.cpp:78:6:virtual void UsbCdcIO::write_byte(uint8_t)	2
+../Core/Src/InterfaceIO.cpp:83:6:virtual void UsbCdcIO::write_buffer(uint8_t*, uint16_t)	2
+../Core/Src/InterfaceIO.cpp:57:6:virtual void UsbCdcIO::init(QueueHandle_t)	2
+../Core/Src/InterfaceIO.cpp:18:6:virtual void UartIO::init(QueueHandle_t)	2
