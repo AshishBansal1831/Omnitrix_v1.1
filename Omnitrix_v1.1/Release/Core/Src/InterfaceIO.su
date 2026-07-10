@@ -1,8 +1,0 @@
-../Core/Src/InterfaceIO.cpp:37:6:virtual void UartIO::write_byte(uint8_t)	0	static
-../Core/Src/InterfaceIO.cpp:46:6:virtual void UartIO::write_buffer(uint8_t*, uint16_t)	16	static
-../Core/Src/InterfaceIO.cpp:30:9:virtual uint8_t UartIO::receive_byte()	16	static
-../Core/Src/InterfaceIO.cpp:65:9:virtual uint8_t UsbCdcIO::receive_byte()	16	static
-../Core/Src/InterfaceIO.cpp:78:6:virtual void UsbCdcIO::write_byte(uint8_t)	16	static
-../Core/Src/InterfaceIO.cpp:83:6:virtual void UsbCdcIO::write_buffer(uint8_t*, uint16_t)	16	static
-../Core/Src/InterfaceIO.cpp:57:6:virtual void UsbCdcIO::init(QueueHandle_t)	16	static
-../Core/Src/InterfaceIO.cpp:18:6:virtual void UartIO::init(QueueHandle_t)	8	static,ignoring_inline_asm
