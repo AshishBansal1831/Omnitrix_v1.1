@@ -18,9 +18,8 @@ StreamBufferHandle_t UsbCdcStreamBuffer = NULL;
 void UartIO::init(QueueHandle_t Q/*, SemaphoreHandle_t RS*/)
 {
 	Queue = Q;
-//	RxSem = RS;
 
-	MX_USART1_UART_Init();
+//	MX_USART1_UART_Init(); // init during main init
 
     LL_USART_EnableIT_RXNE(USART1);
     NVIC_SetPriority(USART1_IRQn, 6);
@@ -30,8 +29,17 @@ void UartIO::init(QueueHandle_t Q/*, SemaphoreHandle_t RS*/)
 uint8_t UartIO::receive_byte()
 {
 	uint8_t received_char = 0;
-	xQueueReceive(RxSem, &received_char, portMAX_DELAY);
+	xQueueReceive(Queue, &received_char, portMAX_DELAY);
 	return received_char;
+}
+
+uint8_t UartIO::receive_byte(uint8_t *byte, uint32_t TimeOut)
+{
+	if (xQueueReceive(Queue, byte, TimeOut) ==pdPASS)
+	{
+		return 1;
+	}
+	return 0;
 }
 
 void UartIO::write_byte(uint8_t byte)
@@ -71,16 +79,54 @@ uint8_t UsbCdcIO::receive_byte()
 		// When CDC_Receive_FS pushes data, this instantly wakes up and returns it.
 		xStreamBufferReceive(UsbCdcStreamBuffer, &rxByte, 1, portMAX_DELAY);
 	}
+	else
+	{
+		print("StreamBuffer is null for somet reason\r\n");
+	}
 
 	return rxByte;
 }
 
+uint8_t UsbCdcIO::receive_byte(uint8_t *byte, uint32_t TimeOut)
+{
+	if(xStreamBufferReceive(UsbCdcStreamBuffer, byte, 1, TimeOut) == pdPASS)
+	{
+		return 1;
+	}
+	return 0;
+}
+
 void UsbCdcIO::write_byte(uint8_t byte)
 {
-	while(CDC_Transmit_FS(&byte, 1) == USBD_BUSY);
+    uint32_t timeout = 5000; // Defensive loop counter
+    while (CDC_Transmit_FS(&byte, 1) == USBD_BUSY)
+    {
+        if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED)
+        {
+            vTaskDelay(pdMS_TO_TICKS(1)); // Yield to let USB IRQ clear the buffer
+        }
+        else
+        {
+            // If scheduler hasn't started yet, use a manual spin timeout
+            if (--timeout == 0) break;
+        }
+    }
 }
 
 void UsbCdcIO::write_buffer(uint8_t *data, uint16_t Length)
 {
-	while(CDC_Transmit_FS(data, Length) == USBD_BUSY);
+    if (Length == 0) return;
+
+    uint32_t timeout = 5000;
+    while (CDC_Transmit_FS(data, Length) == USBD_BUSY)
+    {
+        if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED)
+        {
+            vTaskDelay(pdMS_TO_TICKS(1));
+        }
+        else
+        {
+            if (--timeout == 0) break;
+        }
+    }
 }

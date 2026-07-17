@@ -13,22 +13,12 @@ void CmdLineInterface::init()
 	Mutex.init();
 }
 
-void CmdLineInterface::print(const char *ptr)
-{
-	IO->write_buffer((uint8_t*)ptr, strlen(ptr));
-}
-
-void CmdLineInterface::printn(const char *ptr, const size_t len)
-{
-	IO->write_buffer((uint8_t*)ptr, len);
-}
-
 void CmdLineInterface::get_cmd_ip()
 {
     char received_char = 0;
     size_t index = 0;
 
-    print("\r>>>> ");
+    IO->print("\r>>>> ");
 
     do
     {
@@ -37,13 +27,16 @@ void CmdLineInterface::get_cmd_ip()
         switch (received_char)
         {
             case BACK_SPACE:
+            	IO->write_byte(' ');
+            	IO->write_byte(BACK_SPACE);
             	IO->write_byte(BACK_SPACE);
             	ReceivedCmd[index--] = NULL_CHAR;
                 break;
 
+            case CAR_RET:
             case ENTER:
             	ReceivedCmd[index] = NULL_CHAR;
-                print("\r\n");
+            	IO->print("\r\n");
                 break;
 
             default:
@@ -52,7 +45,7 @@ void CmdLineInterface::get_cmd_ip()
                 break;
         }
 
-    } while (received_char != ENTER);
+    } while (received_char != ENTER && received_char != CAR_RET);
 
     CmdLen = index;
 }
@@ -72,27 +65,30 @@ void CmdLineInterface::command_handler()
 
 	    for (Iter = 0; Iter < TotalCmds; ++Iter)
 	    {
-	    	const CliStruct *tempPtr = &Command_Handler[Iter];
+	    	const CliStruct_t *tempPtr = &Command_Handler[Iter];
 	        const char *cmd = tempPtr->command;
+	        const size_t command_len = strlen(cmd);
 
-	        if (strncasecmp(ReceivedCmd, cmd , CmdLen) == 0)
+	        if (strncasecmp(ReceivedCmd, cmd , command_len) == 0)
 	        {
 	            if (tempPtr->handler != NULL)
 	            {
-	                const char *Arguments = (ReceivedCmd[CmdLen] == NULL_CHAR) ? NULL : strchr(ReceivedCmd, ' ');
-	                tempPtr->handler(Arguments);
+	                const char *Arguments =
+	                		(ReceivedCmd[command_len] == NULL_CHAR) ?
+	                				NULL : strchr(ReceivedCmd, ' ');
+	                tempPtr->handler(IO, Arguments);
 	            }
 	            else
 	            {
-	                print("Not handled\r\n");
+	            	IO->print("Not handled\r\n");
 	            }
-	            return;
+	            break;
 	        }
 	    }
 
 	    if (Iter == TotalCmds)
 	    {
-	        printf("%s cmd not found\r\n", ReceivedCmd);
+	    	IO->printf("'%s' cmd not found\r\n", ReceivedCmd);
 	    }
 
 	}

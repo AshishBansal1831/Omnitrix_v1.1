@@ -71,8 +71,8 @@
 
 #include "tim.h"
 
-#define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS() MX_TIM1_Init()
-#define portGET_RUN_TIME_COUNTER_VALUE()  (htim1.Instance->CNT)
+#define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS() MX_TIM2_Init()
+#define portGET_RUN_TIME_COUNTER_VALUE()  (htim2.Instance->CNT)
 
 /* Required if struct _reent is used. */
 #if ( configUSE_NEWLIB_REENTRANT == 1 )
@@ -255,7 +255,7 @@
 #endif
 
 #ifndef INCLUDE_xTaskGetSchedulerState
-    #define INCLUDE_xTaskGetSchedulerState    0
+    #define INCLUDE_xTaskGetSchedulerState    1
 #endif
 
 #ifndef INCLUDE_xTaskGetCurrentTaskHandle

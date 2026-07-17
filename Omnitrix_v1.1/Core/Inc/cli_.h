@@ -10,33 +10,33 @@
 
 #include <stdint.h>
 
+#include "InterfaceIO.h"
 #include "cpp_mutex.hpp"
 
-class InterfaceIO;
 class CmdLineInterface;
-typedef void (*cmd_handler)(CmdLineInterface *cmd_interface, const char*);
+typedef void (*cmd_handler_t)(InterfaceIO *, const char*);
 
 constexpr uint8_t Max_Cmd_Len = 50;
 
-enum SpecialChar_t
+enum SpecialChar_t : uint8_t
 {
 	BACK_SPACE  = 0x7F,
-	ENTER       = 0x0D,
+	ENTER       = 0x0A,
 	CAR_RET     = '\r',
-	NULL_CHAR	= '\0'
+	NULL_CHAR	= '\0',
 };
 
-struct CliStruct
+struct CliStruct_t
 {
     const char* command;
-    cmd_handler handler;
+    cmd_handler_t handler;
     const char* description;
 };
 
 class CmdLineInterface
 {
 	InterfaceIO *IO;
-	const CliStruct *Command_Handler;
+	const CliStruct_t *Command_Handler;
 	const uint8_t TotalCmds;
 	static FreeRtosMutex Mutex;
 
@@ -47,13 +47,10 @@ class CmdLineInterface
 
 public :
 
-	CmdLineInterface (const CliStruct *Cmd, const uint8_t Total, InterfaceIO *paramIO)
+	CmdLineInterface (const CliStruct_t *Cmd, const uint8_t Total, InterfaceIO *paramIO)
 		: IO(paramIO), Command_Handler(Cmd), TotalCmds(Total)  {}
 	void init();
 	void command_handler();
-	void print(const char *ptr);
-	void printn(const char *ptr, const size_t len);
-	void printf(const char *format, ...);
 };
 
 

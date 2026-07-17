@@ -11,7 +11,6 @@
 #include <ctype.h>
 #include <settings_task.hpp>
 #include <stdlib.h>
-#include <stdarg.h>
 
 /* -- STM32 Library -- */
 #include "usart.h"
@@ -31,59 +30,46 @@
 
 /* -- Extern Variables -- */
 extern UART_HandleTypeDef hUSART1;
-volatile xQueueHandle User_Uart_Queue;
-volatile xQueueHandle UsbCdcRxQueue;
-extern volatile xQueueHandle SettingsQueue;
-extern xTaskHandle CpuMonitorHandler;
+volatile QueueHandle_t User_Uart_Queue;
+volatile QueueHandle_t UsbCdcRxQueue;
+extern volatile QueueHandle_t SettingsQueue;
+extern TaskHandle_t CpuMonitorHandler;
 
 /* -- Function Declarations -- */
-
-/* Returns a pointer to the static buffer containing the user’s input command. */
-static inline char* get_command_input(void);
-
-/* Transmit a single byte over the CLI UART using polling. */
-static inline void cli_tx_byte(const uint8_t);
-
-
-/* Compare user input to registered commands and invoke the matching handler. */
-static void command_handler(const char*);
 
 /* Extracts the first integer found in `src_string`, returns it, and sets `length` to number of characters consumed. */
 long extract_number_from_string(const char *src_string, size_t *length);
 
 /* Print a list of all registered CLI commands and their descriptions. */
-static inline void list_commands(const char*);
-
-/* Generate and print a random number (possibly within a user-specified range). */
-void rand_data(const char*);
-
-/* Parse LED color names and blink rate from `Arguments`, then queue a settings change. */
-void set_blink_rate(const char*);
+static inline void list_commands(InterfaceIO *Io, const char*);
 
 /* Display CPU usage and free stack of all tasks, either once or continuously until ENTER is pressed. */
-void cpu_monitor(const char*);
+void cpu_monitor(InterfaceIO *Io, const char*);
+
+/* Wifi Handler */
+void wifi_cmd_handler(InterfaceIO *IO, const char* arguments);
+void wifi_handler(InterfaceIO *IO, const char* arguments);
+
+/* Mqtt Handler */
+void mqtt_cmd_handler(InterfaceIO *IO, const char* arguments);
+void mqtt_handler(InterfaceIO *IO, const char* arguments);
+
+/* clear screen */
+void clear_screen(InterfaceIO *IO, const char* arguments);
 
 /* Handle UART Settings */
-void uart_settings(const char*);
+void uart_settings(InterfaceIO *Io, const char*);
 
 /* -- Global Variables -- */
 
-const static CliStruct Command_Handlers[] = {
+const static CliStruct_t Command_Handlers[] = {
     { .command = "list",           .handler = list_commands,  .description = "List all commands" },
     { .command = "uart",           .handler = uart_settings,  .description = "Do uart settings from here" },
     { .command = "cpu_monitor",    .handler = cpu_monitor,    .description = "Prints CPU Stats" },
-	{ .command = "wifi" , 		   .handler = NULL,		      .description = "Handler wifi settings" },
-	{ .command = "mqtt" , 		   .handler = NULL,		      .description = "Handler mqtt settings" },
+	{ .command = "wifi" , 		   .handler = wifi_handler,	  .description = "Handler wifi settings" },
+	{ .command = "mqtt" , 		   .handler = mqtt_handler,	  .description = "Handler mqtt settings" },
     { .command = "update",         .handler = NULL,           .description = "Should Put Device in update mode" },
-};
-
-const static CliStruct Command_HandlersIO[] = {
-    { .command = "list",           .handler = list_commands,  .description = "List all commands" },
-    { .command = "uart",           .handler = uart_settings,  .description = "Do uart settings from here" },
-    { .command = "cpu_monitor",    .handler = cpu_monitor,    .description = "Prints CPU Stats" },
-	{ .command = "wifi" , 		   .handler = NULL,		      .description = "Handler wifi settings" },
-	{ .command = "mqtt" , 		   .handler = NULL,		      .description = "Handler mqtt settings" },
-    { .command = "update",         .handler = NULL,           .description = "Should Put Device in update mode" },
+	{ .command = "clear",          .handler = clear_screen,   .description = "clears screen" },
 };
 
 static const char* CPU_USAGE_Commands[] = { "once", "continue" };
@@ -92,93 +78,15 @@ static const char* CPU_USAGE_Commands[] = { "once", "continue" };
 /*                          Static Inline Function Group                      */
 /* -------------------------------------------------------------------------- */
 
-/* -- CLI UART TX Byte -- */
-/* Transmit a single byte over the CLI UART using polling. */
-static inline void cli_tx_byte(const uint8_t byte)
-{
-    while (!LL_USART_IsActiveFlag_TXE(USART1))
-        ;
-    LL_USART_TransmitData8(USART1, byte);
-}
-
-/* -- CLI Print String -- */
-/* Print a null-terminated string over the CLI UART by sending each byte. */
-void cli_print(const char *ptr)
-{
-    const size_t len = strlen(ptr);
-    for (size_t i = 0; i < len; ++i)
-    {
-        cli_tx_byte(ptr[i]);
-    }
-}
-
-/* -- CLI Print Fixed Length String -- */
-/* Print a buffer of length `len` over the CLI UART by sending each byte. */
-void cli_printn(const char *ptr, const size_t len)
-{
-    for (size_t i = 0; i < len; ++i)
-    {
-        cli_tx_byte(ptr[i]);
-    }
-}
-
-/* -- Get Command Input from User -- */
-/* Reads characters from the CLI queue until ENTER is pressed, handling backspace, and returns the resulting command string. */
-static inline char* get_command_input(void)
-{
-    char received_char = 0;
-    static char received_command[MAX_CMD_LEN] = { 0 };
-    size_t index = 0;
-
-    cli_print("\r>>>> ");
-
-    do
-    {
-        if (User_Uart_Queue != NULL)
-            xQueueReceive(User_Uart_Queue, &received_char, portMAX_DELAY);
-
-        switch (received_char)
-        {
-            case BACK_SPACE:
-                cli_tx_byte(BACK_SPACE);
-                received_command[index--] = '\0';
-                break;
-
-            case ENTER:
-                received_command[index] = '\0';
-                cli_print("\r\n");
-                break;
-
-            default:
-                cli_tx_byte(received_char);
-                received_command[index++] = received_char;
-                break;
-        }
-
-    } while (received_char != ENTER);
-
-    return received_command;
-}
 
 /* -- List All Registered Commands -- */
 /* Iterates through `Command_Handlers` and prints each command name and description. */
-static inline void list_commands(const char*)
-{
-    for (uint8_t iter = 0; iter < TOTAL_COMMANDS; ++iter)
-    {
-        cli_printf("%d. %-10s: %s %s\r\n",
-			   iter + 1,
-			   Command_Handlers[iter].command,
-			   Command_Handlers[iter].description,
-			   Command_Handlers[iter].handler == NULL ? "(Not Implemented)" : "");
-    }
-}
 
-static inline void list_commands(CmdLineInterface *cmd_interface, const char*)
+static inline void list_commands(InterfaceIO *Io, const char*)
 {
-    for (uint8_t iter = 0; iter < IO ; ++iter)
+    for (uint8_t iter = 0; iter < TOTAL_COMMANDS ; ++iter)
     {
-        cli_printf("%d. %-10s: %s %s\r\n",
+        Io->printf("%d. %-10s: %s %s\r\n",
 			   iter + 1,
 			   Command_Handlers[iter].command,
 			   Command_Handlers[iter].description,
@@ -192,29 +100,15 @@ static inline void list_commands(CmdLineInterface *cmd_interface, const char*)
 
 /* -- CLI Task -- */
 /* FreeRTOS task that waits for a full command via UART interrupts and then dispatches it to the command handler. */
-extern "C" void Cli_Task(void *Arguments)
-{
-    MX_USART1_UART_Init();
-
-    LL_USART_EnableIT_RXNE(USART1);
-    NVIC_SetPriority(USART1_IRQn, 6);
-    NVIC_EnableIRQ(USART1_IRQn);
-
-    while (1)
-    {
-        command_handler(get_command_input());
-    }
-}
-
 void cli_task(void *Arguments)
 {
     // The safe, modern C++ way to cast down from a void pointer
     InterfaceIO *Obj = static_cast<InterfaceIO *>(Arguments);
-
     // Quick defensive check to ensure you didn't pass a null pointer
     if (Obj == nullptr) {
         vTaskDelete(NULL);
     }
+    Obj->print("inside the cli_task\r\n");
 
 
     CmdLineInterface cli(Command_Handlers, TOTAL_COMMANDS, Obj);
@@ -251,12 +145,12 @@ long extract_number_from_string(const char *src_string, size_t *length)
 /* -- CPU Monitor Command -- */
 /* Retrieves runtime stats for each FreeRTOS task and prints CPU usage and free stack.
  * If "continue" is passed, updates in place until ENTER is pressed. */
-void cpu_monitor(const char* arguments)
+void cpu_monitor(InterfaceIO *IO, const char* arguments)
 {
     uint8_t command_type = 0;
     if (arguments == NULL)
     {
-        cli_print("Please pass arguments\r\n");
+    	IO->print("Please pass arguments\r\n");
         return;
     }
 
@@ -273,12 +167,12 @@ void cpu_monitor(const char* arguments)
     }
     else if (strcasecmp(CPU_USAGE_Commands[1], arguments + index) == 0)
     {
-        cli_print("Press Enter to stop\r\n");
+    	IO->print("Press Enter to stop\r\n");
         command_type = 2;  // continue
     }
     else
     {
-        cli_print("Invalid argument. Use \"once\" or \"continue\"\r\n");
+    	IO->print("Invalid argument. Use \"once\" or \"continue\"\r\n");
         return;
     }
 
@@ -289,10 +183,13 @@ void cpu_monitor(const char* arguments)
     char received_char = 0;
     TaskStatus_t task_status[TOTAL_TASKS_TO_WATCH] = { 0 };
 
-    cli_printf("%-10s | %-6s | %-17s |\r\n", "Task", "CPU%", "Free Stack (words)");
-    cli_print("------------------------------------------------------\r\n");
+    IO->printf("%-10s | %-6s | %-17s |\r\n", "Task", "CPU%", "Free Stack (words)");
+    IO->print("------------------------------------------------------\r\n");
 
-    cli_print("\033[?25l"); // Hide cursor
+    if (command_type == 2) // continuous
+    {
+    	IO->print("\033[?25l"); // Hide cursor
+    }
 
     do
     {
@@ -301,7 +198,7 @@ void cpu_monitor(const char* arguments)
         for (TaskIter = 0; TaskIter < total_tasks; ++TaskIter)
         {
             const float cpu_percentage = (task_status[TaskIter].ulRunTimeCounter * 100.0f) / total_run_time;
-            cli_printf("%-10s | %6.2f | %17d |\r\n",
+            IO->printf("%-10s | %6.2f | %17d |\r\n",
                             task_status[TaskIter].pcTaskName,
                             cpu_percentage,
                             task_status[TaskIter].usStackHighWaterMark);
@@ -309,13 +206,42 @@ void cpu_monitor(const char* arguments)
 
         if (command_type == 2) // continuous
         {
-            xQueueReceive(User_Uart_Queue, &received_char, 1000);
-            cli_printf("\033[%dA\033[2K\r", total_tasks); // Move cursor up and clear line
+        	IO->receive_byte((uint8_t*)&received_char, 10);
+            IO->printf("\033[%dA\033[2K\r", total_tasks); // Move cursor up and clear line
         }
 
-    } while (command_type == 2 && received_char != ENTER);
+    } while (command_type == 2 && received_char != ENTER && received_char != CAR_RET);
 
-    cli_print("\033[?25h\r\n"); // Show cursor again
+    if (command_type == 2) // continuous
+    {
+    	IO->print("\033[?25h\r\n"); // Show cursor again
+    }
+}
+
+void wifi_handler(InterfaceIO *IO, const char* arguments)
+{
+
+}
+
+void mqtt_cmd_handler(InterfaceIO *IO, const char* arguments)
+{
+
+}
+void mqtt_handler(InterfaceIO *IO, const char* arguments)
+{
+
+}
+
+void clear_screen(InterfaceIO *IO, const char* arguments)
+{
+    (void)arguments;
+
+    if (IO != nullptr)
+    {
+        // \033[2J  -> Clears the entire screen
+        // \033[H   -> Moves the cursor to the home position (top-left corner)
+        IO->print("\033[2J\033[H");
+    }
 }
 
 static inline uint8_t is_baudrate_valid(const uint32_t BaudRate)
@@ -340,11 +266,11 @@ static inline uint8_t is_baudrate_valid(const uint32_t BaudRate)
     return valid;
 }
 
-void uart_settings(const char* Arguments)
+void uart_settings(InterfaceIO *IO, const char* Arguments)
 {
     if(NULL == Arguments)
     {
-        cli_print("Please provide BaudRate\r\n");
+        IO->print("Please provide BaudRate\r\n");
         return;
     }
     char* endptr = NULL;
@@ -353,65 +279,14 @@ void uart_settings(const char* Arguments)
 
     if(0 == NewBaudRate || is_baudrate_valid(NewBaudRate) != 1)
     {
-        cli_print("Please provide Valid BaudRate\r\n");
+    	IO->print("Please provide Valid BaudRate\r\n");
         return;
     }
 
     Settings uart_settings = { .config_id = Config_t::UART_CONFIG};
     memcpy(&uart_settings.Buffer, &NewBaudRate, sizeof(NewBaudRate ));
 
-    xQueueSend(SettingsQueue, &uart_settings, portMAX_DELAY);
-}
-
-/* -- Handle Parsed Command -- */
-/* Compares `user_input` against registered commands and invokes the corresponding handler, passing any arguments. */
-static void command_handler(const char *user_input)
-{
-    if(*user_input == '\0') // <! User just pressed enter without any input
-    {
-        return;
-    }
-
-    uint8_t i = 0;
-    const size_t total = sizeof(Command_Handlers) / sizeof(Command_Handlers[0]);
-
-    for (i = 0; i < total; ++i)
-    {
-        const char *cmd = Command_Handlers[i].command;
-
-        if (strncasecmp(user_input, cmd, strlen(cmd)) == 0)
-        {
-            if (Command_Handlers[i].handler != NULL)
-            {
-                const char *Arguments = (user_input[strlen(cmd)] == '\0') ? NULL : strchr(user_input, ' ');
-                Command_Handlers[i].handler(Arguments);
-            }
-            else
-            {
-                cli_print("Not handled\r\n");
-            }
-            return;
-        }
-    }
-
-    if (i == total)
-    {
-        cli_printf("%s cmd not found\r\n", user_input);
-    }
-}
-
-/* -- Formatted Print to CLI -- */
-/* Formats a string using vsprintf and sends it via `cli_print`. Returns number of chars printed. */
-size_t cli_printf(const char *format, ...)
-{
-    char print_buffer[100];
-    va_list args;
-    va_start(args, format);
-    size_t len = vsprintf(print_buffer, format, args);
-    va_end(args);
-
-    cli_print(print_buffer);
-    return len;
+//    xQueueSend(SettingsQueue, &uart_settings, portMAX_DELAY);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -420,21 +295,28 @@ size_t cli_printf(const char *format, ...)
 
 /* -- USART1 Interrupt Service Routine -- */
 /* Called when a new byte arrives on USART1. Reads the byte and places it into the CLI queue. */
-void USART1_IRQHandler(void)
+extern "C" void USART1_IRQHandler(void)
 {
-    uint8_t received = 0xff;
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
-    // Check if RXNE (Receive Data Register Not Empty) flag is active
-    // and the RXNE interrupt is enabled
+    // Check if RXNE flag is active and enabled
     if (LL_USART_IsActiveFlag_RXNE(USART1) && LL_USART_IsEnabledIT_RXNE(USART1))
     {
-        // Also check for potential error flags (optional but recommended)
-        if (!LL_USART_IsActiveFlag_FE(USART1) &&  // Framing Error
-            !LL_USART_IsActiveFlag_NE(USART1) &&  // Noise Error
-            !LL_USART_IsActiveFlag_ORE(USART1))   // Overrun Error
+        // Check for hardware line errors (Overrun, Noise, Framing, Parity)
+        if (LL_USART_IsActiveFlag_ORE(USART1) ||
+            LL_USART_IsActiveFlag_FE(USART1)  ||
+            LL_USART_IsActiveFlag_NE(USART1))
         {
-            received = LL_USART_ReceiveData8(USART1);
+            // Clear the error state by reading the data register and discarding the corrupt byte
+            volatile uint8_t discard = LL_USART_ReceiveData8(USART1);
+            (void)discard; // Silence unused variable warning
+        }
+        else
+        {
+            // Clean read of valid data
+            uint8_t received = LL_USART_ReceiveData8(USART1);
+
+            // Send to queue ONLY if the scheduler is running and queue is valid
             if (User_Uart_Queue != NULL)
             {
                 xQueueSendFromISR(User_Uart_Queue, &received, &xHigherPriorityTaskWoken);
@@ -442,5 +324,6 @@ void USART1_IRQHandler(void)
         }
     }
 
+    // Context switch if a higher priority task was awoken by the new byte
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }

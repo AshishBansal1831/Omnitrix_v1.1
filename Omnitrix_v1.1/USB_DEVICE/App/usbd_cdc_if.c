@@ -259,19 +259,42 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
   * @param  Len: Number of data received (in bytes)
   * @retval Result of the operation: USBD_OK if all operations are OK else USBD_FAIL
   */
+//static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
+//{
+//  /* USER CODE BEGIN 6 */
+//  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+//
+//  if (UsbCdcStreamBuffer != NULL && *Len > 0)
+//  {
+//	  // Copy ALL incoming bytes (*Len) directly into the stream buffer in one shot!
+//	  xStreamBufferSendFromISR(UsbCdcStreamBuffer, Buf, *Len, &xHigherPriorityTaskWoken);
+//  }
+//  USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
+//  USBD_CDC_ReceivePacket(&hUsbDeviceFS);
+//
+//  portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+//  return (USBD_OK);
+//  /* USER CODE END 6 */
+//}
+
 static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 {
-
   /* USER CODE BEGIN 6 */
   BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
-  if (UsbCdcStreamBuffer != NULL && *Len > 0)
+  if (UsbCdcStreamBuffer != NULL && Len != NULL && *Len > 0)
   {
-	  // Copy ALL incoming bytes (*Len) directly into the stream buffer in one shot!
-	  xStreamBufferSendFromISR(UsbCdcStreamBuffer, Buf, *Len, &xHigherPriorityTaskWoken);
+      // Safely copy all bytes out of the hardware buffer into FreeRTOS space
+      xStreamBufferSendFromISR(UsbCdcStreamBuffer, Buf, *Len, &xHigherPriorityTaskWoken);
   }
+
+  // Tell the USB stack to listen for the next packet on the Out Endpoint
   USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
-  USBD_CDC_ReceivePacket(&hUsbDeviceFS);
+
+  if (USBD_CDC_ReceivePacket(&hUsbDeviceFS) != USBD_OK)
+  {
+      // Optional: Add a debug counter or catch here if the hardware rejects the re-arm
+  }
 
   portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
   return (USBD_OK);

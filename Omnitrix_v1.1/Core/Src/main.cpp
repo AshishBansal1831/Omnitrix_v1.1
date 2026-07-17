@@ -64,7 +64,7 @@ UsbCdcIO UsbCdcHandle;
 void SystemClock_Config(void);
 void setting_task(void*);
 /* USER CODE BEGIN PFP */
-
+extern void cli_task(void *Arguments);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -96,7 +96,6 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -105,29 +104,30 @@ int main(void)
   MX_SPI1_Init();
   MX_USART1_UART_Init();
   MX_USB_DEVICE_Init();
+  MX_TIM2_Init();
   MX_SPI2_Init();
-  MX_TIM1_Init();
-  /* USER CODE BEGIN 2 */
-  HAL_TIM_Base_Start(&htim1); // This timer is used for CPU Monitoring Live RUN Time Use
-  HAL_NVIC_SetPriorityGrouping(NVIC_PRIORITYGROUP_4);   //ensure proper priority grouping for freeRTOS
-  SEGGER_SYSVIEW_Conf();
+    /* USER CODE BEGIN 2 */
+  	UsbCdcHandle.init(NULL);
+    HAL_TIM_Base_Start(&htim2); // Used for CPU Monitoring Live RUN Time Use
 
-  User_Uart_Queue = xQueueCreate(50, sizeof(char));
-  UartPort.init(User_Uart_Queue);
-  UsbCdcHandle.init(NULL);
-//  SettingsQueue = xQueueCreate(10, sizeof(Settings));
-//    Adc_to_cdc_queue = xQueueCreate(50, sizeof(uint16_t));
+    // 1. Force priority grouping FIRST so the system registers it
+    HAL_NVIC_SetPriorityGrouping(NVIC_PRIORITYGROUP_4);
 
-//  assert_param(xTaskCreate(Cli_Task, "CLI Task", 512 / 4, NULL, tskIDLE_PRIORITY + 3, NULL) == pdPASS);
-  assert_param(xTaskCreate(cli_task, "Uart CLI Task", 256, &UartPort, tskIDLE_PRIORITY + 3, NULL) == pdPASS);
-  assert_param(xTaskCreate(cli_task, "USB CDC CLI Task", 256, &UsbCdcHandle, tskIDLE_PRIORITY + 3, NULL) == pdPASS);
-  assert_param(xTaskCreate(setting_task, "Setting Task", 512 / 4, NULL, tskIDLE_PRIORITY + 3, NULL) == pdPASS);
-  //    assert_param(xTaskCreate(adc_task, "ADC Task", 512, NULL, tskIDLE_PRIORITY + 2, &Adc_Task_Handle) == pdPASS);
+    // 2. Initialize SystemView BEFORE making ANY FreeRTOS OS object calls
+//    SEGGER_SYSVIEW_Conf();
 
-  HAL_TIM_Base_Start(&htim1); // This timer is used for CPU Monitoring Live RUN Time Use
+    // 3. Now it is completely safe to create your queues
+    User_Uart_Queue = xQueueCreate(50, sizeof(char));
+    UartPort.init(User_Uart_Queue);
 
-  //    SEGGER_SYSVIEW_Start();      // Start trace recording
-  vTaskStartScheduler();
+    // 4. Create your C++ tasks
+    xTaskCreate(cli_task, "Uart CLI Task", 512, &UartPort, tskIDLE_PRIORITY + 2, NULL);
+    xTaskCreate(cli_task, "USB CDC CLI Task", 512, &UsbCdcHandle, tskIDLE_PRIORITY + 3, NULL);
+
+    // 5. Start trace recording right before launching the scheduler
+//    SEGGER_SYSVIEW_Start();
+
+    vTaskStartScheduler();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -147,46 +147,67 @@ int main(void)
   */
 void SystemClock_Config(void)
 {
-  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+	  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+	  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-  /** Configure the main internal regulator output voltage
-  */
-  __HAL_RCC_PWR_CLK_ENABLE();
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+	  /** Configure the main internal regulator output voltage
+	  */
+	  __HAL_RCC_PWR_CLK_ENABLE();
+	  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
 
-  /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 4;
-  RCC_OscInitStruct.PLL.PLLN = 144;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 6;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
-    Error_Handler();
-  }
+	  /** Initializes the RCC Oscillators according to the specified parameters
+	  * in the RCC_OscInitTypeDef structure.
+	  */
+	  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+	  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+	  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+	  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+	  RCC_OscInitStruct.PLL.PLLM = 4;
+	  RCC_OscInitStruct.PLL.PLLN = 168;
+	  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
+	  RCC_OscInitStruct.PLL.PLLQ = 7;
+	  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+	  {
+	    Error_Handler();
+	  }
 
-  /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
+	  /** Initializes the CPU, AHB and APB buses clocks
+	  */
+	  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+	                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+	  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+	  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+	  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
+	  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
-  {
-    Error_Handler();
-  }
+	  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
+	  {
+	    Error_Handler();
+	  }
 }
 
 /* USER CODE BEGIN 4 */
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM1 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM1)
+  {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  /* USER CODE END Callback 1 */
+}
 
 /* USER CODE END 4 */
 
@@ -198,7 +219,8 @@ void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
+	UartPort.print("error handler\r\n");
+//  __disable_irq();
   while (1)
   {
   }
