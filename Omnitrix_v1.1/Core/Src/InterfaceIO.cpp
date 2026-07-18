@@ -68,6 +68,10 @@ void UsbCdcIO::init(QueueHandle_t Q/*, SemaphoreHandle_t RS */)
 	{
 		UsbCdcStreamBuffer = xStreamBufferCreate(256, 1);
 	}
+
+	// Force the USB Interrupt priority down so FreeRTOS APIs can run inside it safely
+	HAL_NVIC_SetPriority(OTG_FS_IRQn, 6, 0);
+	HAL_NVIC_EnableIRQ(OTG_FS_IRQn);
 }
 
 uint8_t UsbCdcIO::receive_byte()

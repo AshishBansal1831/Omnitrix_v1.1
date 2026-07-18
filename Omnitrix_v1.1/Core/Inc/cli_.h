@@ -37,11 +37,11 @@ class CmdLineInterface
 {
 	InterfaceIO *IO;
 	const CliStruct_t *Command_Handler;
-	const uint8_t TotalCmds;
 	static FreeRtosMutex Mutex;
 
 	char ReceivedCmd[Max_Cmd_Len];
 	uint8_t CmdLen = 0;
+	const uint8_t TotalCmds;
 
 	void get_cmd_ip();
 

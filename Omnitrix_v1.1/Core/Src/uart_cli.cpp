@@ -108,7 +108,7 @@ void cli_task(void *Arguments)
     if (Obj == nullptr) {
         vTaskDelete(NULL);
     }
-    Obj->print("inside the cli_task\r\n");
+//    Obj->print("inside the cli_task\r\n");
 
 
     CmdLineInterface cli(Command_Handlers, TOTAL_COMMANDS, Obj);
@@ -191,31 +191,68 @@ void cpu_monitor(InterfaceIO *IO, const char* arguments)
     	IO->print("\033[?25l"); // Hide cursor
     }
 
-    do
-    {
-        total_tasks = uxTaskGetSystemState(task_status, TOTAL_TASKS_TO_WATCH, &total_run_time);
+    // Fixed refresh rate control (e.g., update every 500 ms)
+	const TickType_t xRefreshPeriod = pdMS_TO_TICKS(500);
+	TickType_t xLastWakeTime = xTaskGetTickCount();
 
-        for (TaskIter = 0; TaskIter < total_tasks; ++TaskIter)
-        {
-            const float cpu_percentage = (task_status[TaskIter].ulRunTimeCounter * 100.0f) / total_run_time;
-            IO->printf("%-10s | %6.2f | %17d |\r\n",
-                            task_status[TaskIter].pcTaskName,
-                            cpu_percentage,
-                            task_status[TaskIter].usStackHighWaterMark);
-        }
+	do
+	{
+		TickType_t xCurrentTime = xTaskGetTickCount();
 
-        if (command_type == 2) // continuous
-        {
-        	IO->receive_byte((uint8_t*)&received_char, 10);
-            IO->printf("\033[%dA\033[2K\r", total_tasks); // Move cursor up and clear line
-        }
+		// ONLY calculate and print if the 500ms refresh period has elapsed
+		if ((xCurrentTime - xLastWakeTime) >= xRefreshPeriod)
+		{
+			xLastWakeTime = xCurrentTime;
 
-    } while (command_type == 2 && received_char != ENTER && received_char != CAR_RET);
+			total_tasks = uxTaskGetSystemState(task_status, TOTAL_TASKS_TO_WATCH, &total_run_time);
 
-    if (command_type == 2) // continuous
-    {
-    	IO->print("\033[?25h\r\n"); // Show cursor again
-    }
+			for (TaskIter = 0; TaskIter < total_tasks; ++TaskIter)
+			{
+				if (total_run_time > 0)
+				{
+					const float cpu_percentage = (task_status[TaskIter].ulRunTimeCounter * 100.0f) / total_run_time;
+					IO->printf("%-10s | %6.2f%% | %18d |\r\n",
+									task_status[TaskIter].pcTaskName,
+									cpu_percentage,
+									task_status[TaskIter].usStackHighWaterMark);
+				}
+				else
+				{
+					IO->printf("%-10s | --.--%% | %18d |\r\n",
+									task_status[TaskIter].pcTaskName,
+									task_status[TaskIter].usStackHighWaterMark);
+				}
+			}
+
+			if (command_type == 2) // continuous
+			{
+				// Move cursor up exactly by the number of tasks printed to prepare for overwrite
+				IO->printf("\033[%dA", total_tasks);
+			}
+		}
+
+		// Continuous Mode: Poll for exit key with a small, CPU-friendly sleep window
+		if (command_type == 2)
+		{
+			// Blocks the task completely for 20ms waiting for input, letting the CPU rest.
+			// 20ms gives instant UI responsiveness while dropping CPU utilization close to 0%.
+			if (IO->receive_byte((uint8_t*)&received_char, pdMS_TO_TICKS(20)) == 1)
+			{
+				if (received_char == ENTER || received_char == CAR_RET)
+				{
+					break;
+				}
+			}
+		}
+
+	} while (command_type == 2);
+
+	if (command_type == 2) // continuous
+	{
+		// Clean up the terminal space: move past the table block and restore cursor
+		IO->printf("\033[%dB", total_tasks);
+		IO->print("\033[?25h\r\n");
+	}
 }
 
 void wifi_handler(InterfaceIO *IO, const char* arguments)

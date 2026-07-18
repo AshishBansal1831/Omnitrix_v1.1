@@ -5,10 +5,20 @@
  *      Author: ashish
  */
 
+#define FREERTOS
+
 #include <iostream>
 #include <cstring>
 #include <gc9a01a_spi.hpp>
 
+#ifdef FREERTOS
+
+	#include "FreeRTOS.h"
+	#include "task.h"
+	#include "limits"
+#else
+
+#endif
 
 #define DMA_BUF_PIXELS   (240 * 8)          // 8 rows — tunable
 #define DMA_BUF_BYTES    (DMA_BUF_PIXELS * 2)
@@ -20,9 +30,15 @@ constexpr uint16_t Y_OFFSET = 80;
 
 
 static uint8_t  dma_buf[2][DMA_BUF_BYTES];
+#ifdef FREERTOS
+
+TaskHandle_t xGuiTaskHandle = NULL;
+
+#else
+
 volatile uint8_t dma_busy = false;      // set in launch, cleared in callback
 
-
+#endif
 // A simple 5x7 font representation of 'A'
 static const uint8_t font_5x7_A[] = {
     0b00100, //   #
@@ -203,6 +219,7 @@ void GC9A01A::init()
     HAL_Delay(20);
 
     fill_screen(0x0000);                               // Clear to black
+    vTaskDelay(10);
 }
 void GC9A01A::cs_low()
 {
@@ -413,63 +430,6 @@ void GC9A01A::draw_fast_vline(
     cs_high();
 }
 
-#if 0
-void GC9A01A::draw_omnitrix_growth_frame(const uint8_t row_bounds[240], uint16_t triangle_color, uint16_t bg_color)
-{
-    cs_low();
-    // Set a single window covering the active vertical bounds of the screen
-    set_window(0, 10, 239, 229);
-    begin_write();
-
-    for (uint16_t y = 10; y < 230; y++)
-    {
-        uint8_t left_triangle_width = row_bounds[y];
-        uint8_t right_triangle_width = left_triangle_width;
-        uint16_t middle_bg_width = 240 - (left_triangle_width + right_triangle_width);
-
-        // 1. Blast left triangle pixels
-        write_color(triangle_color, left_triangle_width);
-
-        // 2. Blast background space between them
-        write_color(bg_color, middle_bg_width);
-
-        // 3. Blast right triangle pixels
-        write_color(triangle_color, right_triangle_width);
-    }
-    cs_high();
-}
-
-void GC9A01A::draw_omnitrix_cross_frame(const uint8_t row_bounds[240], uint16_t triangle_color, uint16_t bg_color)
-{
-    cs_low();
-    set_window(0, 10, 239, 229);
-    begin_write();
-
-    for (uint16_t y = 10; y < 230; y++)
-    {
-        uint8_t current_tip = row_bounds[y];
-
-        // Safety bounds check for circular clipping
-        if (current_tip > 120) current_tip = 120;
-
-        // Calculate the shrinking background flanks on the edges
-        uint8_t edge_bg_width = 120 - current_tip;
-        uint16_t center_solid_green_width = current_tip * 2;
-
-        // 1. Left Flank: Shrinking background gap
-        write_color(bg_color, edge_bg_width);
-
-        // 2. Center Core: Expanding solid green body of both triangles intersecting
-        write_color(triangle_color, center_solid_green_width);
-
-        // 3. Right Flank: Shrinking background gap (symmetrical)
-        write_color(bg_color, edge_bg_width);
-    }
-    cs_high();
-}
-
-#endif
-
 void GC9A01A::fill_rect(uint16_t x, uint16_t y,
                          uint16_t w, uint16_t h,
                          uint16_t color)
@@ -498,8 +458,13 @@ void GC9A01A::fill_rect(uint16_t x, uint16_t y,
         if (chunk > fill_pixels) chunk = fill_pixels;
 
         // Wait for previous DMA on this buffer slot, then fire
-        dma_wait();
+        if (sent > 0)
+        {
+			dma_wait();
+		}
+#ifndef FREERTOS
         dma_busy = true;
+#endif
         HAL_SPI_Transmit_DMA(&Handle, dma_buf[buf_idx], chunk * 2);
 
         buf_idx ^= 1;   // flip buffer index
@@ -659,125 +624,6 @@ void GC9A01A::fill_triangle(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, 
     }
 }
 
-void GC9A01A::benchmark_write_color() {
-	// ==============================
-	// write_color BENCHMARK
-	// Runs both versions back to back
-	// Green box = uint16* version faster
-	// Black box = byte version faster
-	// ==============================
-
-	// Version 1 — uint16_t pointer fill (static buf)
-	auto write_color_v1 = [&](uint16_t color, uint32_t count) {
-	    static uint8_t buf[240 * 2];
-	    const uint16_t swapped = ((color >> 8) & 0x00FF) |
-	                             ((color << 8) & 0xFF00);
-	    uint32_t pixels = (count > 240) ? 240 : count;
-	    uint16_t *ptr = (uint16_t *)buf;
-	    uint16_t *end = ptr + pixels;
-	    while (ptr < end) *ptr++ = swapped;
-	    HAL_SPI_Transmit(&Handle, buf, pixels * 2, HAL_MAX_DELAY);
-	};
-
-	// Version 2 — byte fill (VLA)
-	auto write_color_v2 = [&](uint16_t color, uint32_t count) {
-	    uint8_t buf[count * 2];
-	    for (uint32_t i = 0; i < count; i++) {
-	        buf[i*2]   = color >> 8;
-	        buf[i*2+1] = color & 0xFF;
-	    }
-	    HAL_SPI_Transmit(&Handle, buf, count * 2, HAL_MAX_DELAY);
-	};
-
-	// --- Benchmark ---
-	constexpr uint32_t BENCH_ITERATIONS = 100;
-	uint32_t t_start = 0;
-	uint32_t ms_v1, ms_v2;
-
-	// Warmup — avoid cold cache effects
-	fill_screen(0x0000);
-
-	// Measure V1
-	t_start = HAL_GetTick();
-	for (uint32_t i = 0; i < BENCH_ITERATIONS; i++) {
-	    set_window(0, i % 240, 239, i % 240);
-	    begin_write();
-	    write_color_v1(0xF800, 240);
-	    cs_high();
-	}
-	ms_v1 = HAL_GetTick() - t_start;
-
-	// Brief pause between tests
-	HAL_Delay(100);
-
-	// Measure V2
-	t_start = HAL_GetTick();
-	for (uint32_t i = 0; i < BENCH_ITERATIONS; i++) {
-	    set_window(0, i % 240, 239, i % 240);
-	    begin_write();
-	    write_color_v2(0xF800, 240);
-	    cs_high();
-	}
-	ms_v2 = HAL_GetTick() - t_start;
-
-	// --- Result ---
-	fill_screen(0x0000);
-
-	if (ms_v1 <= ms_v2) {
-	    // V1 faster or equal — green box
-	    fill_rect(70, 80, 100, 80, 0x07E0);
-
-	    // Visual margin bar — how much faster
-	    // Each pixel of width = 1ms difference
-	    uint32_t diff = ms_v2 - ms_v1;
-	    if (diff > 0)
-	        fill_rect(70, 170, diff > 100 ? 100 : diff, 10, 0xFFFF);
-	} else {
-	    // V2 faster — red box
-	    fill_rect(70, 80, 100, 80, 0xF800);
-
-	    uint32_t diff = ms_v1 - ms_v2;
-	    if (diff > 0)
-	        fill_rect(70, 170, diff > 100 ? 100 : diff, 10, 0xFFFF);
-	}
-
-	// White bar below box = difference in ms (1px per ms, max 100px wide)
-	// No bar = effectively identical
-
-	#ifdef ITM_ENABLED
-	    printf("V1 (uint16*): %lu ms\n", ms_v1);
-	    printf("V2 (byte):    %lu ms\n", ms_v2);
-	    printf("Diff:         %ld ms\n", (int32_t)ms_v1 - (int32_t)ms_v2);
-	#endif
-
-	HAL_Delay(5000);
-}
-
-
-void GC9A01A::draw_font5x7(uint16_t x, uint16_t y, char ch, uint16_t Color)
-{
-	uint16_t write_font[7][5] = {0};
-
-	Color = Color >> 8 | Color << 8;
-
-	for(uint8_t Iter = 0; Iter < 7; ++Iter)
-	{
-		for(uint8_t Iter2 = 0; Iter2 < 5; ++Iter2)
-		{
-			if(font_5x7_A[Iter2] & (1 << Iter))
-			{
-				write_font[Iter][Iter2] = Color;
-			}
-		}
-	}
-
-	cs_low();                                    // CS low once
-	set_window(x, y, x + 5 - 1, y + 7 - 1);
-	begin_write();
-	HAL_SPI_Transmit(&Handle, (uint8_t *)write_font, sizeof(write_font), HAL_MAX_DELAY);
-	cs_high();
-}
-
 // 1. Core Function (Signature updated to w, then h)
 void GC9A01A::draw_bitmap(uint16_t x, uint16_t y, const uint16_t *bitmap, uint16_t w, uint16_t h)
 {
@@ -800,16 +646,9 @@ void GC9A01A::draw_bitmap(uint16_t x, uint16_t y, const Bitmap_t &bitmap)
 void GC9A01A::draw_bitmap(uint8_t AlignFlag, const Bitmap_t &bitmap)
 {
 
-	printf(
-	    "W:%d H:%d\r\n",
-	    bitmap.Width,
-	    bitmap.Height
-	);
 	// Default to Center for both axes
 	uint16_t x_pos = (WIDTH_RES - bitmap.Width) / 2;
 	uint16_t y_pos = (HEIGHT_RES - bitmap.Height) / 2;
-
-	printf("Flag - %02X\r\n", AlignFlag);
 
 	// Overwrite X if Left or Right is specified
 	if(AlignFlag & Alignment::LEFT)       x_pos = 0;
@@ -819,7 +658,6 @@ void GC9A01A::draw_bitmap(uint8_t AlignFlag, const Bitmap_t &bitmap)
 	if(AlignFlag & Alignment::TOP)        y_pos = 0;
 	else if(AlignFlag & Alignment::BOTTOM)y_pos = HEIGHT_RES - bitmap.Height;
 
-	printf("positions - %d,%d\r\n", x_pos, y_pos);
 
 	draw_bitmap(x_pos, y_pos, bitmap);
 }
@@ -842,7 +680,12 @@ void GC9A01A::draw_bitmap_1bit(
     uint8_t buf_idx = 0;
 
     for (uint16_t row = 0; row < h; row++) {
-        // Decode THIS row into the INACTIVE buffer (CPU work)
+        // SAFETY: Wait for the specific buffer slot to become available
+        // before the CPU modifies it.
+        if (row > 0) {
+            dma_wait();
+        }
+
         uint16_t *ptr = (uint16_t *)dma_buf[buf_idx];
 
         for (uint16_t col = 0; col < w; col++) {
@@ -851,15 +694,16 @@ void GC9A01A::draw_bitmap_1bit(
             *ptr++ = is_fg ? fg_sw : bg_sw;
         }
 
-        // Wait for DMA on previous row, launch this row
-        dma_wait();
+        // Fire the asynchronous transfer for this row
+#ifndef FREERTOS
         dma_busy = true;
+#endif
         HAL_SPI_Transmit_DMA(&Handle, dma_buf[buf_idx], w * 2);
 
-        buf_idx ^= 1;   // next iteration decodes into the other buffer
-                        // while DMA ships this one
+        buf_idx ^= 1;   // Flip buffer slot for the next row loop
     }
 
+    // Ensure the very last row transmission finishes before pulling CS high
     dma_wait();
     cs_high();
 }
@@ -875,13 +719,63 @@ void GC9A01A::draw_triangle(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, 
 
 inline void GC9A01A::dma_wait()
 {
+#ifdef FREERTOS
+
+	BaseType_t xResult;
+	uint32_t ulNotificationValue;
+
+	do
+	{
+		xResult = xTaskNotifyWait(
+			0x00,               // Do not clear bits on entry
+			INT32_MAX,          // Clear all bits on exit
+			&ulNotificationValue,
+			portMAX_DELAY  // 100ms timeout guard (just in case hardware locks up)
+		);
+	}while(xResult != pdPASS);
+#else
     while (dma_busy);   // spin until previous DMA done
+#endif
 }
 
 void GC9A01A::dma_send(uint8_t *buf, uint32_t bytes)
 {
     dma_wait();
+#ifdef FREERTOS
+
+#else
     dma_busy = true;
+#endif
     HAL_SPI_Transmit_DMA(&Handle, buf, bytes);
     // returns immediately — callback clears dma_busy
 }
+
+
+extern "C" void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
+{
+	printf("Hello\r\n");
+#ifdef FREERTOS
+	if (hspi->Instance == SPI1) // Match your display SPI instance
+	{
+		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+		if (xGuiTaskHandle != NULL)
+		{
+			// Use xTaskNotifyFromISR to match xTaskNotifyWait
+			xTaskNotifyFromISR(
+					xGuiTaskHandle,
+					0x01,               // Set Bit 0
+					eSetBits,
+					&xHigherPriorityTaskWoken
+			);
+		}
+
+		// Context switch inside the ISR if the GUI task has a higher priority than the interrupted task
+		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+	}
+#else
+    // Called by DMA IRQ when transfer complete
+    dma_busy = 0;
+#endif
+}
+

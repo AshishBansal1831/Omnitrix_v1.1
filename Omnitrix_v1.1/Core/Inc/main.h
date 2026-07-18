@@ -46,7 +46,12 @@ extern "C" {
 
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
-
+#define SPI1_CS_Pin GPIO_PIN_4
+#define SPI1_CS_GPIO_Port GPIOA
+#define DataCmd_Pin GPIO_PIN_4
+#define DataCmd_GPIO_Port GPIOC
+#define LCD_RESET_Pin GPIO_PIN_5
+#define LCD_RESET_GPIO_Port GPIOC
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
