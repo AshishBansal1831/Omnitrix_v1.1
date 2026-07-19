@@ -135,7 +135,7 @@ int main(void) {
 	// 3. Now it is completely safe to create your queues
 	User_Uart_Queue = xQueueCreate(50, sizeof(char));
 	UartPort.init(User_Uart_Queue);
-
+	UartPort.print("hello\r\n");
 
 	// 4. Create your C++ tasks
 	xTaskCreate(cli_task, "Uart CLI Task", 700, &UartPort, tskIDLE_PRIORITY + 3,

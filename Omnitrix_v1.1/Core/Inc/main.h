@@ -64,6 +64,7 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define LEFT_ROT_BUTTON_Pin GPIO_PIN_1
 #define LEFT_ROT_BUTTON_GPIO_Port GPIOA
+#define LEFT_ROT_BUTTON_EXTI_IRQn EXTI1_IRQn
 #define LCD_CHIP_SELECT_Pin GPIO_PIN_4
 #define LCD_CHIP_SELECT_GPIO_Port GPIOA
 #define DataCmd_Pin GPIO_PIN_4
@@ -72,12 +73,14 @@ void Error_Handler(void);
 #define LCD_RESET_GPIO_Port GPIOC
 #define RIGHT_ROT_BUTTON_Pin GPIO_PIN_13
 #define RIGHT_ROT_BUTTON_GPIO_Port GPIOE
+#define RIGHT_ROT_BUTTON_EXTI_IRQn EXTI15_10_IRQn
 #define ESP_READY_Pin GPIO_PIN_15
 #define ESP_READY_GPIO_Port GPIOE
 #define ESP_CS_Pin GPIO_PIN_9
 #define ESP_CS_GPIO_Port GPIOD
 #define ACTIVITY_BUTTON_Pin GPIO_PIN_8
 #define ACTIVITY_BUTTON_GPIO_Port GPIOB
+#define ACTIVITY_BUTTON_EXTI_IRQn EXTI9_5_IRQn
 
 /* USER CODE BEGIN Private defines */
 

@@ -108,12 +108,8 @@ void cli_task(void *Arguments)
     if (Obj == nullptr) {
         vTaskDelete(NULL);
     }
-//    Obj->print("inside the cli_task\r\n");
-
 
     CmdLineInterface cli(Command_Handlers, TOTAL_COMMANDS, Obj);
-
-    // Now you can safely call your virtual engine loop!
 
     cli.command_handler();
 }

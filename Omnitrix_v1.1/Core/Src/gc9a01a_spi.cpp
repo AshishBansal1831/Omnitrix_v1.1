@@ -628,7 +628,6 @@ void GC9A01A::fill_triangle(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, 
 void GC9A01A::draw_bitmap(uint16_t x, uint16_t y, const uint16_t *bitmap, uint16_t w, uint16_t h)
 {
 	cs_low();
-	printf("x:%d-%d, y:%d-%d\r\n", x, x + w - 1, y, y + h - 1);
 	set_window(x, y, x + w - 1, y + h - 1);      // FIXED: X pairs with W, Y pairs with H
 	begin_write();
 	HAL_SPI_Transmit(&Handle, (uint8_t *)bitmap, w * h * 2, HAL_MAX_DELAY);
@@ -753,7 +752,6 @@ void GC9A01A::dma_send(uint8_t *buf, uint32_t bytes)
 
 extern "C" void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
 {
-	printf("Hello\r\n");
 #ifdef FREERTOS
 	if (hspi->Instance == SPI1) // Match your display SPI instance
 	{

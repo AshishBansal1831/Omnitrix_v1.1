@@ -12,6 +12,7 @@
 extern GC9A01A tft;
 extern const uint8_t omnitrix_data[];
 extern TaskHandle_t xGuiTaskHandle;
+extern void handleOmniWatch();
 
 void gui_task(void *arguments)
 {
@@ -27,6 +28,7 @@ void gui_task(void *arguments)
     // Keep the task alive or let it process background UI updates
     while(1)
     {
-        vTaskDelay(pdMS_TO_TICKS(1000));
+    	handleOmniWatch();
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
