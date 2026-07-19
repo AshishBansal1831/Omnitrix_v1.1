@@ -78,6 +78,7 @@ void Error_Handler(void);
 #define ESP_READY_GPIO_Port GPIOE
 #define ESP_CS_Pin GPIO_PIN_9
 #define ESP_CS_GPIO_Port GPIOD
+#define ESP_CS_EXTI_IRQn EXTI9_5_IRQn
 #define ACTIVITY_BUTTON_Pin GPIO_PIN_8
 #define ACTIVITY_BUTTON_GPIO_Port GPIOB
 #define ACTIVITY_BUTTON_EXTI_IRQn EXTI9_5_IRQn

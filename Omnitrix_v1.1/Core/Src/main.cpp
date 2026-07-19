@@ -81,6 +81,7 @@ void setting_task(void*);
 /* USER CODE BEGIN PFP */
 extern void cli_task(void *Arguments);
 extern void gui_task(void *Arguments);
+extern void ipc_task(void *);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -138,13 +139,17 @@ int main(void) {
 	UartPort.print("hello\r\n");
 
 	// 4. Create your C++ tasks
-	xTaskCreate(cli_task, "Uart CLI Task", 700, &UartPort, tskIDLE_PRIORITY + 3,
-			NULL);
+	xTaskCreate(cli_task, "Uart CLI Task", 700, &UartPort,
+			tskIDLE_PRIORITY + 3, NULL);
+
 	xTaskCreate(cli_task, "USB CDC CLI Task", 800, &UsbCdcHandle,
 			tskIDLE_PRIORITY + 3, NULL);
 
 	xTaskCreate(gui_task, "Display Task", 1024, NULL,
-				tskIDLE_PRIORITY + 2, NULL);
+			tskIDLE_PRIORITY + 3, NULL);
+
+	xTaskCreate(ipc_task, "IPC Task", 512, NULL,
+			tskIDLE_PRIORITY + 3, NULL);
 
 	// 5. Start trace recording right before launching the scheduler
 //    SEGGER_SYSVIEW_Start();
@@ -154,7 +159,8 @@ int main(void) {
 
 	/* Infinite loop */
 	/* USER CODE BEGIN WHILE */
-	while (1) {
+	while (1)
+	{
 		/* USER CODE END WHILE */
 
 		/* USER CODE BEGIN 3 */

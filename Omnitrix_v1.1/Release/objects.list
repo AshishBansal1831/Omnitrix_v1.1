@@ -9,6 +9,7 @@
 "./Core/Src/cli_.o"
 "./Core/Src/cmd_handler.o"
 "./Core/Src/dma.o"
+"./Core/Src/fifo.o"
 "./Core/Src/gc9a01a_spi.o"
 "./Core/Src/gpio.o"
 "./Core/Src/gui_task.o"

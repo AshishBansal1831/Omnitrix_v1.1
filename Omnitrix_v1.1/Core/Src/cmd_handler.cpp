@@ -11,6 +11,14 @@
 
 #include "cmd_handler.h"
 
+#if STATE_MACHINE_DECODE == 1
+#include "InterfaceIO.h"
+
+extern UartIO UartPort;
+
+#endif
+
+
 typedef uint8_t crc_t;
 
 enum CMD_DECODE_STATE
@@ -79,7 +87,7 @@ uint16_t make_packet(uint8_t *payload, uint16_t length)
 
         // XOR CRC
         Crc= calc_crc(cmd_out_buffer, length);
-        // printf("crc - %02X %d\r\n", Crc, length);
+        // UartPort.printf("crc - %02X %d\r\n", Crc, length);
         cmd_out_buffer[Index] = Crc;
     }
 
@@ -89,17 +97,19 @@ uint16_t make_packet(uint8_t *payload, uint16_t length)
 uint8_t check_cmd(const uint8_t Recv)
 {
     static CMD_DECODE_STATE Decode_state = HEADER;
-
-//    static CMD_DECODE_STATE prev_state = HEADER;
+#if STATE_MACHINE_DECODE == 1
+    static CMD_DECODE_STATE prev_state = HEADER;
+#endif
     static size_t Index = 0;
     static uint16_t NumOfBytes = 0;
     Packet *packet = &G_Packets;
-//    if(prev_state != Decode_state)
-//    {
-//        printf("Decode_state - %d\r\n", Decode_state);
-//        prev_state = Decode_state;
-//    }
-
+#if STATE_MACHINE_DECODE == 1
+    if(prev_state != Decode_state)
+    {
+        UartPort.printf("Decode_state - %d\r\n", Decode_state);
+        prev_state = Decode_state;
+    }
+#endif
 
     switch(Decode_state)
     {
@@ -127,7 +137,9 @@ uint8_t check_cmd(const uint8_t Recv)
 
         case LENGTH:
             packet->Length = (packet->Length << 8)  | (uint16_t)Recv ;
-//            printf("Got Length - %d\r\n", packet->Length);
+#if STATE_MACHINE_DECODE == 1
+            UartPort.printf("Got Length - %d\r\n", packet->Length);
+#endif
             NumOfBytes++;
             packet->Calc_Crc ^= Recv;
 
@@ -135,13 +147,17 @@ uint8_t check_cmd(const uint8_t Recv)
             {
                 if(packet->Length == 0 || packet->Length > CMD_BUFFER_SIZE)
                 {
-                    // printf("Got length - 0\r\n");
+#if STATE_MACHINE_DECODE == 1
+                	UartPort.printf("Got length - 0\r\n");
+#endif
                     Decode_state = HEADER;
                 }
                 else
                 {
                     Index = 0;
-//                    printf("Got Length - %d\r\n", packet->Length);
+#if STATE_MACHINE_DECODE == 1
+                    UartPort.printf("Got Length - %d\r\n", packet->Length);
+#endif
                     NumOfBytes = 0;
                     Decode_state = PAYLOAD;
                 }
@@ -163,10 +179,14 @@ uint8_t check_cmd(const uint8_t Recv)
             Decode_state = HEADER;
             if(packet->Recv_Crc == packet->Calc_Crc) //CRC Correct
             {
-                // printf("Got the Packet\r\n");
+#if STATE_MACHINE_DECODE == 1
+                 UartPort.print("Got the Packet\r\n");
+#endif
                 return 1;
             }
-            // printf("CRC Mismatch %02X %02X\r\n", packet->Calc_Crc, packet->Recv_Crc);
+#if STATE_MACHINE_DECODE == 1
+             UartPort.printf("CRC Mismatch %02X %02X\r\n", packet->Calc_Crc, packet->Recv_Crc);
+#endif
             break;
 
         default:

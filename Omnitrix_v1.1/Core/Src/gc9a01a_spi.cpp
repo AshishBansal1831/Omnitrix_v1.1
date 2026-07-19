@@ -33,7 +33,7 @@ static uint8_t  dma_buf[2][DMA_BUF_BYTES];
 #ifdef FREERTOS
 
 TaskHandle_t xGuiTaskHandle = NULL;
-
+extern TaskHandle_t IPC_Taskhandle;
 #else
 
 volatile uint8_t dma_busy = false;      // set in launch, cleared in callback
@@ -753,9 +753,10 @@ void GC9A01A::dma_send(uint8_t *buf, uint32_t bytes)
 extern "C" void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
 {
 #ifdef FREERTOS
+	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 	if (hspi->Instance == SPI1) // Match your display SPI instance
 	{
-		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
 
 		if (xGuiTaskHandle != NULL)
 		{
@@ -770,6 +771,18 @@ extern "C" void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
 
 		// Context switch inside the ISR if the GUI task has a higher priority than the interrupted task
 		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+	}
+	else if(hspi->Instance == SPI2)
+	{
+		if(IPC_Taskhandle != NULL)
+		{
+			xTaskNotifyFromISR(
+					xGuiTaskHandle,
+					0x01,               // Set Bit 0
+					eSetBits,
+					&xHigherPriorityTaskWoken
+			);
+		}
 	}
 #else
     // Called by DMA IRQ when transfer complete

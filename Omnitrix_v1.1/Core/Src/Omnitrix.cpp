@@ -222,9 +222,9 @@ void handleOmniWatch()
 		for(uint8_t Iter = 0; Iter < MaxLoopCnt; ++Iter)
 		{
 			tft.draw_bitmap_1bit(0, 0, omnitrix_data, 240, 240, 0x00, WhiteClr);
-			DisplayDelay(500);
+			DisplayDelay(200);
 			tft.draw_bitmap_1bit(0, 0, omnitrix_data, 240, 240, 0x00, RedClr);
-			DisplayDelay(500);
+			DisplayDelay(200);
 		}
 		tft.fill_screen(RedClr);
 		DisplayDelay(250);
@@ -239,17 +239,3 @@ void handleOmniWatch()
 	}
 }
 
-
-extern "C" void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-
-    /* Use eSetBits to logical-OR the current pin's bit into the task's notification value */
-    xTaskNotifyFromISR(xGuiTaskHandle,
-                       (uint32_t)GPIO_Pin,
-                       eSetBits,
-                       &xHigherPriorityTaskWoken);
-
-    /* Context switch if a higher priority task was woken */
-    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-}

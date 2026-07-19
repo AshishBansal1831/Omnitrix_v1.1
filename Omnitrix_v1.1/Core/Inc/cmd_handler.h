@@ -8,6 +8,7 @@
 #ifndef INC_CMD_HANDLER_H_
 #define INC_CMD_HANDLER_H_
 
+#define STATE_MACHINE_DECODE	1
 
 #ifdef __cplusplus
 extern "C" {
