@@ -50,7 +50,6 @@ SequenceError init_sequence()
   SequenceError error = SequenceError::NO_ERROR;
   uint8_t Iter = 0;
 
-
   // Retrieve Data from LittleFS
   {
     File file = LittleFS.open(ConfigFileName, "r");

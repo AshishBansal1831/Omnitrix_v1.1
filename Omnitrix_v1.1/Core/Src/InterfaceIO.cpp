@@ -14,6 +14,45 @@
 
 StreamBufferHandle_t UsbCdcStreamBuffer = NULL;
 
+extern Time local_time;
+
+size_t InterfaceIO::get_string_input(char *ReceivedCmd, const size_t buf_size)
+{
+    char received_char = 0;
+    size_t index = 0;
+
+    this->print("\r>>>> ");
+
+    do
+    {
+    	received_char = (char)this->receive_byte();
+
+        switch (received_char)
+        {
+            case BACK_SPACE:
+            	this->write_byte(' ');
+            	this->write_byte(BACK_SPACE);
+            	this->write_byte(BACK_SPACE);
+            	ReceivedCmd[index--] = NULL_CHAR;
+                break;
+
+            case CAR_RET:
+            case ENTER:
+            	ReceivedCmd[index] = NULL_CHAR;
+            	this->print("\r\n");
+                break;
+
+            default:
+            	this->write_byte(received_char);
+                ReceivedCmd[index++] = received_char;
+                break;
+        }
+
+    } while (received_char != ENTER && received_char != CAR_RET && buf_size);
+
+    return index;
+}
+
 /*******************UartIO Handling***********************/
 void UartIO::init(QueueHandle_t Q/*, SemaphoreHandle_t RS*/)
 {

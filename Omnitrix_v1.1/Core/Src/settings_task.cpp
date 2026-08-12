@@ -4,13 +4,15 @@
  *  Created on: Jun 1, 2025
  *      Author: Ashish Bansal
  */
+
+#if 0
 #include <usart.h>
 #include <string.h>
 #include "FreeRTOS.h"
 #include "queue.h"
 #include "settings_task.hpp"
 
-volatile xQueueHandle SettingsQueue;
+volatile xQueueHandle CliToIpcQueue;
 
 void setting_task(void*)
 {
@@ -19,7 +21,7 @@ void setting_task(void*)
 
     while (1)
     {
-        if (xQueueReceive(SettingsQueue, (uint8_t*) &queue_settings, portMAX_DELAY) != pdPASS)
+        if (xQueueReceive(CliToIpcQueue, (uint8_t*) &queue_settings, portMAX_DELAY) != pdPASS)
         {
             continue;
         }
@@ -45,3 +47,4 @@ void setting_task(void*)
         }
     }
 }
+#endif

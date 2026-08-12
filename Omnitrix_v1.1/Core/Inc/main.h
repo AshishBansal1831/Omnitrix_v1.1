@@ -84,6 +84,28 @@ void Error_Handler(void);
 #define ACTIVITY_BUTTON_EXTI_IRQn EXTI9_5_IRQn
 
 /* USER CODE BEGIN Private defines */
+enum SpecialChar_t : uint8_t
+{
+	BACK_SPACE  = 0x7F,
+	ENTER       = 0x0A,
+	CAR_RET     = '\r',
+	NULL_CHAR	= '\0',
+};
+
+struct Time
+{
+	uint8_t Day;
+	uint8_t Month;
+	uint16_t Year;
+
+	uint8_t Hour;
+	uint8_t Min;
+	uint8_t Sec;
+	uint16_t MilliSecond;
+};
+void set_time(const uint32_t Time); // as got from the wifi module
+void set_date(const uint32_t Date); // ddmmyyyy
+void read_time(char *read_time_buf, size_t buf_size);
 
 /* USER CODE END Private defines */
 

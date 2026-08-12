@@ -11,6 +11,8 @@
 #include <stdint.h>
 #include <limits.h>
 
+#include "InterfaceIO.h"
+
 enum class Config_t : uint8_t
 {
 	UART_CONFIG,
@@ -37,7 +39,8 @@ struct Settings
 {
 	Config_t config_id;
     uint8_t Buffer[UINT8_MAX]; // this will contain the sub configuration such as WifiConfig or Mqtt Config
-    uint8_t CmdSrc;
+    InterfaceIO *CmdSrc;
+    size_t totalSize;
 } ;
 
 //extern "C" void setting_task(void*);

@@ -15,12 +15,18 @@ extern "C" {
 #endif
 #define CMD_BUFFER_SIZE 550
 
-enum PACKET_TYPE
+#define PACKET_BUFFER_SIZE	50
+#define PAYLOAD_SIZE	18U
+
+constexpr uint8_t TOTAL_SPI_PACKT_SIZE = 24U; // 0xA5 0x5A PacketNo, TOtalPackets, PacketID, 18Bytes Payload
+
+enum PACKET_TYPE : uint8_t
 {
-  DATA,
-  CONFIG,
+  TIME_DATE_DATA = 1,
   REQUEST,
+  WIFI_CONFIG,
   ACK,
+  DEVICE_STATUS,
   EVENT_LOG,
   BOOTLOADER,
 

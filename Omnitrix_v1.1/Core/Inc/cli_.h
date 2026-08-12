@@ -18,14 +18,6 @@ typedef void (*cmd_handler_t)(InterfaceIO *, const char*);
 
 constexpr uint8_t Max_Cmd_Len = 50;
 
-enum SpecialChar_t : uint8_t
-{
-	BACK_SPACE  = 0x7F,
-	ENTER       = 0x0A,
-	CAR_RET     = '\r',
-	NULL_CHAR	= '\0',
-};
-
 struct CliStruct_t
 {
     const char* command;
@@ -42,8 +34,6 @@ class CmdLineInterface
 	char ReceivedCmd[Max_Cmd_Len];
 	uint8_t CmdLen = 0;
 	const uint8_t TotalCmds;
-
-	void get_cmd_ip();
 
 public :
 

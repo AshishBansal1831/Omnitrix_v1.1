@@ -38,7 +38,7 @@ struct Packet
     uint8_t Flags;
     enum PACKET_TYPE PacketID;
     uint16_t Length;
-    uint8_t *Buffer_pointer;
+    uint8_t Buffer[PACKET_BUFFER_SIZE];
     uint8_t Recv_Crc;
     uint8_t Calc_Crc;
 };
@@ -47,8 +47,6 @@ Packet G_Packets;
 uint8_t cmd_payload_buffer[CMD_BUFFER_SIZE];
 uint8_t cmd_out_buffer[CMD_BUFFER_SIZE];
 size_t cmd_index;
-
-uint8_t littlefs_handler(const uint8_t *data, uint16_t length);
 
 crc_t calc_crc(const uint8_t *buffer, size_t Len)
 {

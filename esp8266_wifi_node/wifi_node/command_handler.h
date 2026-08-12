@@ -5,15 +5,17 @@ extern "C" {
 #endif
 #define CMD_BUFFER_SIZE 550
 
-enum PACKET_TYPE
-{
-  DATA,
-  CONFIG,
-  REQUEST,
-  ACK,
-  EVENT_LOG,
-  BOOTLOADER,
+constexpr uint8_t PAYLOAD_MAX_LENGTH = 18U;
 
+enum PACKET_TYPE : uint8_t
+{
+    TIME_DATE_DATA = 1,
+    REQUEST,
+    CONFIG,
+    ACK,
+    DEVICE_STATUS,
+    EVENT_LOG,
+    BOOTLOADER,
 };
 
 uint16_t make_packet(uint8_t *payload, uint16_t length);

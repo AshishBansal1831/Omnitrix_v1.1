@@ -11,7 +11,7 @@
 #include "gpio.h"
 #include "omnitrix_anim.h"
 
-#define FREERTOS
+//#define FREERTOS
 
 #ifdef FREERTOS
 #include "FreeRTOS.h"

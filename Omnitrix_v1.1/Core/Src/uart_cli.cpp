@@ -27,12 +27,13 @@
 
 #include "InterfaceIO.h"
 #include "cli_.h"
+#include "ipc_task.h"
 
 /* -- Extern Variables -- */
 extern UART_HandleTypeDef hUSART1;
 volatile QueueHandle_t User_Uart_Queue;
 volatile QueueHandle_t UsbCdcRxQueue;
-extern volatile QueueHandle_t SettingsQueue;
+extern volatile QueueHandle_t CliToIpcQueue;
 extern TaskHandle_t CpuMonitorHandler;
 
 /* -- Function Declarations -- */
@@ -45,6 +46,8 @@ static inline void list_commands(InterfaceIO *Io, const char*);
 
 /* Display CPU usage and free stack of all tasks, either once or continuously until ENTER is pressed. */
 void cpu_monitor(InterfaceIO *Io, const char*);
+
+static inline void display_time(InterfaceIO *Io, const char*);
 
 /* Wifi Handler */
 void wifi_cmd_handler(InterfaceIO *IO, const char* arguments);
@@ -64,6 +67,7 @@ void uart_settings(InterfaceIO *Io, const char*);
 
 const static CliStruct_t Command_Handlers[] = {
     { .command = "list",           .handler = list_commands,  .description = "List all commands" },
+	{ .command = "display_time",   .handler = display_time,   .description = "Display time and Date" },
     { .command = "uart",           .handler = uart_settings,  .description = "Do uart settings from here" },
     { .command = "cpu_monitor",    .handler = cpu_monitor,    .description = "Prints CPU Stats" },
 	{ .command = "wifi" , 		   .handler = wifi_handler,	  .description = "Handler wifi settings" },
@@ -73,6 +77,110 @@ const static CliStruct_t Command_Handlers[] = {
 };
 
 static const char* CPU_USAGE_Commands[] = { "once", "continue" };
+
+namespace WiFi
+{
+	void list(InterfaceIO *Io, const char*);
+
+	void add_wifi(InterfaceIO *Io, const char*)
+	{
+		char *tempbuf = nullptr;
+		char ssid[30] = {0};
+		char password[30] = {0};
+
+		Io->print("Enter SSID : ");
+		const size_t ssid_len = Io->get_string_input(ssid, sizeof(ssid));
+		Io->print("Enter Password : ");
+		const size_t pwd_len = Io->get_string_input(password, sizeof(password));
+
+		// send this data to the mdule to add to list
+		// Queue format IPC ID, ssid buffer len, ssid, passowrd buffer len, password
+		const size_t totalSize = 1 + 1 + ssid_len + 1 + pwd_len;
+		char *sending_temp_buffer = new char[totalSize];
+
+		if(sending_temp_buffer == nullptr)
+		{
+			Io->print("Couldn't get the heap buffer");
+			return;
+		}
+
+		tempbuf = sending_temp_buffer;
+
+		*tempbuf = IpcID::WIFI_REMOVE;
+		tempbuf++;
+
+		*tempbuf = totalSize;
+		tempbuf++;
+
+		*tempbuf = ssid_len;
+		tempbuf++;
+
+		strncpy(tempbuf, ssid, ssid_len);
+		tempbuf += ssid_len;
+
+		*tempbuf = pwd_len;
+		strncpy(tempbuf, password, pwd_len);
+
+		// send to queue
+		xQueueSend(CliToIpcQueue, sending_temp_buffer, 100);
+		delete[] sending_temp_buffer;
+	}
+
+	void remove_wifi(InterfaceIO *Io, const char*)
+	{
+		Io->print("Enter SSID : ");
+		char ssid[30] = {0};
+		const size_t ssid_len = Io->get_string_input(ssid, sizeof(ssid));
+
+		// send this data to the mdule to add to list
+		// Queue format IPC ID, ssid buffer len, ssid, passowrd buffer len, password
+		const size_t totalSize = 1 + 1 + ssid_len ;
+		char *sending_temp_buffer = new char[totalSize];
+		char *tempbuf = nullptr;
+
+		if(sending_temp_buffer == nullptr)
+		{
+			Io->print("Couldn't get the heap buffer");
+			return;
+		}
+
+		tempbuf = sending_temp_buffer;
+
+		*tempbuf = IpcID::WIFI_REMOVE;
+		tempbuf++;
+
+		*tempbuf = totalSize;
+		tempbuf++;
+
+		*tempbuf = ssid_len;
+		tempbuf++;
+
+		strncpy(tempbuf, ssid, ssid_len);
+
+		// send to queue
+		xQueueSend(CliToIpcQueue, sending_temp_buffer, 100);
+		delete[] sending_temp_buffer;
+	}
+
+	const static CliStruct_t wifiSubCommands[] =
+	{
+		{.command = "list", 		.handler = list, 		.description = "List wifi routers or commands"},
+		{.command = "add_wifi", 	.handler = add_wifi, 	.description = "add new wifi with password"},
+		{.command = "remove_wifi", 	.handler = remove_wifi, .description = "remove a wifi credential"},
+	};
+
+	void list(InterfaceIO *Io, const char*)
+	{
+	    for (uint8_t iter = 0; iter < TOTAL_COMMANDS ; ++iter)
+	    {
+	    	Io->printf("%d. %-10s: %s %s\r\n",
+	    			iter + 1,
+					Command_Handlers[iter].command,
+					Command_Handlers[iter].description,
+					Command_Handlers[iter].handler == NULL ? "(Not Implemented)" : "");
+	    }
+	}
+}
 
 /* -------------------------------------------------------------------------- */
 /*                          Static Inline Function Group                      */
@@ -92,6 +200,33 @@ static inline void list_commands(InterfaceIO *Io, const char*)
 			   Command_Handlers[iter].description,
 			   Command_Handlers[iter].handler == NULL ? "(Not Implemented)" : "");
     }
+}
+
+static inline void display_time(InterfaceIO *Io, const char* arg)
+{
+	if(arg == nullptr)
+	{
+		return;
+	}
+
+	char received_char = 0;
+	char Buffer[120] = {0};
+
+	do
+	{
+		read_time(Buffer, sizeof(Buffer));
+		Io->print(Buffer);
+		if(*arg == 'c')
+		{
+			if (Io->receive_byte((uint8_t*)&received_char, pdMS_TO_TICKS(500)) == 1)
+			{
+				if (received_char == ENTER || received_char == CAR_RET)
+				{
+					break;
+				}
+			}
+		}
+	}while(*arg == 'c');
 }
 
 /* -------------------------------------------------------------------------- */

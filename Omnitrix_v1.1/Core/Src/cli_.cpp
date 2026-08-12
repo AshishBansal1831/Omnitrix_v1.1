@@ -13,48 +13,11 @@ void CmdLineInterface::init()
 	Mutex.init();
 }
 
-void CmdLineInterface::get_cmd_ip()
-{
-    char received_char = 0;
-    size_t index = 0;
-
-    IO->print("\r>>>> ");
-
-    do
-    {
-    	received_char = (char)IO->receive_byte();
-
-        switch (received_char)
-        {
-            case BACK_SPACE:
-            	IO->write_byte(' ');
-            	IO->write_byte(BACK_SPACE);
-            	IO->write_byte(BACK_SPACE);
-            	ReceivedCmd[index--] = NULL_CHAR;
-                break;
-
-            case CAR_RET:
-            case ENTER:
-            	ReceivedCmd[index] = NULL_CHAR;
-            	IO->print("\r\n");
-                break;
-
-            default:
-            	IO->write_byte(received_char);
-                ReceivedCmd[index++] = received_char;
-                break;
-        }
-
-    } while (received_char != ENTER && received_char != CAR_RET);
-
-    CmdLen = index;
-}
-
 void CmdLineInterface::command_handler()
 {
 	while(1)
 	{
-		get_cmd_ip();
+		CmdLen = IO->get_string_input(ReceivedCmd, sizeof(ReceivedCmd));
 
 	    if(CmdLen == 0) // <! User just pressed enter without any input
 	    {

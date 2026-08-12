@@ -38,6 +38,7 @@
 
 #include "gc9a01a_spi.hpp"
 #include "Omnitrix.hpp"
+#include "cpp_mutex.hpp"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -72,6 +73,11 @@ GC9A01A tft(
 	LCD_RESET_Pin
 
 );
+
+Time local_time;
+FreeRtosMutex timeMutex;
+
+extern volatile xQueueHandle CliToIpcQueue;
 
 /* USER CODE END PV */
 
@@ -135,6 +141,8 @@ int main(void) {
 
 	// 3. Now it is completely safe to create your queues
 	User_Uart_Queue = xQueueCreate(50, sizeof(char));
+	CliToIpcQueue = xQueueCreate(120, sizeof(char));
+
 	UartPort.init(User_Uart_Queue);
 	UartPort.print("hello\r\n");
 
@@ -229,6 +237,61 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 	/* USER CODE BEGIN Callback 1 */
 
 	/* USER CODE END Callback 1 */
+}
+
+void set_time(const uint32_t Time) // as got from the wifi module
+{
+	const uint8_t Hr = Time / 10000;
+	const uint8_t Min = (Time / 100) % 100;
+	const uint8_t Sc = Time % 100;
+
+	{
+		std::lock_guard<FreeRtosMutex> lock(timeMutex);
+		local_time.Hour = Hr;
+		local_time.Min = Min;
+		local_time.Sec = Sc ;
+	}
+}
+
+void set_date(const uint32_t Date) // ddmmyyyy
+{
+	const uint8_t Day = Date / 1000000;
+	const uint8_t Mn = (Date / 10000 ) % 100;
+	const uint16_t Yr = Date % 10000;
+
+	{
+		std::lock_guard<FreeRtosMutex> lock(timeMutex);
+		local_time.Day = Day;
+		local_time.Month = Mn;
+		local_time.Year = Yr;
+	}
+}
+
+// Completed read_time function
+void read_time(char *read_time_buf, size_t buf_size)
+{
+    if (read_time_buf == nullptr || buf_size == 0) {
+        return;
+    }
+
+    // 1. Thread-safe snapshot of local_time
+    uint8_t  hr, min, sec;
+    uint8_t  day, month;
+    uint16_t yr;
+
+    {
+        std::lock_guard<FreeRtosMutex> lock(timeMutex);
+        hr    = local_time.Hour;
+        min   = local_time.Min;
+        sec   = local_time.Sec;
+        day   = local_time.Day;
+        month = local_time.Month;
+        yr    = local_time.Year;
+    }
+
+    // 2. Format string safely outside the lock (HH:MM:SS)
+    // Adjust format string depending on display requirement (e.g., "HH:MM:SS" or "HH:MM")
+    snprintf(read_time_buf, buf_size, "Date:%02u:%02u:%04u\r\nTime%02u:%02u:%02u", day, month, yr, hr, min, sec);
 }
 
 /* USER CODE END 4 */
