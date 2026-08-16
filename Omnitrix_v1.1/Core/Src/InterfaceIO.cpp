@@ -16,12 +16,15 @@ StreamBufferHandle_t UsbCdcStreamBuffer = NULL;
 
 extern Time local_time;
 
-size_t InterfaceIO::get_string_input(char *ReceivedCmd, const size_t buf_size)
+size_t InterfaceIO::get_string_input(char *ReceivedCmd, const size_t buf_size, const char *tag)
 {
     char received_char = 0;
     size_t index = 0;
 
-    this->print("\r>>>> ");
+    if(tag != nullptr)
+    {
+    	this->print(tag);
+    }
 
     do
     {

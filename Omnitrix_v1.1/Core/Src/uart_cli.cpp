@@ -35,6 +35,9 @@ volatile QueueHandle_t User_Uart_Queue;
 volatile QueueHandle_t UsbCdcRxQueue;
 extern volatile QueueHandle_t CliToIpcQueue;
 extern TaskHandle_t CpuMonitorHandler;
+extern TaskHandle_t IPC_Taskhandle;
+
+extern IpcQueueCom IpcCom;
 
 /* -- Function Declarations -- */
 
@@ -84,20 +87,17 @@ namespace WiFi
 
 	void add_wifi(InterfaceIO *Io, const char*)
 	{
-		char *tempbuf = nullptr;
+		uint8_t *tempbuf = nullptr;
 		char ssid[30] = {0};
 		char password[30] = {0};
 
-		Io->print("Enter SSID : ");
-		const size_t ssid_len = Io->get_string_input(ssid, sizeof(ssid));
-		Io->print("Enter Password : ");
-		const size_t pwd_len = Io->get_string_input(password, sizeof(password));
-
+		const size_t ssid_len = Io->get_string_input(ssid, sizeof(ssid), "Enter SSID : ");
+		const size_t pwd_len = Io->get_string_input(password, sizeof(password), "Enter Password : ");
 		// send this data to the mdule to add to list
 		// Queue format IPC ID, ssid buffer len, ssid, passowrd buffer len, password
 		const size_t totalSize = 1 + 1 + ssid_len + 1 + pwd_len;
-		char *sending_temp_buffer = new char[totalSize];
-
+		uint8_t *sending_temp_buffer = new uint8_t[totalSize];
+		Io->printf("totalsize - %d\r\n", totalSize);
 		if(sending_temp_buffer == nullptr)
 		{
 			Io->print("Couldn't get the heap buffer");
@@ -106,7 +106,7 @@ namespace WiFi
 
 		tempbuf = sending_temp_buffer;
 
-		*tempbuf = IpcID::WIFI_REMOVE;
+		*tempbuf = IpcID::WIFI_ADD;
 		tempbuf++;
 
 		*tempbuf = totalSize;
@@ -115,15 +115,30 @@ namespace WiFi
 		*tempbuf = ssid_len;
 		tempbuf++;
 
-		strncpy(tempbuf, ssid, ssid_len);
+		strncpy((char*)tempbuf, ssid, ssid_len);
 		tempbuf += ssid_len;
 
 		*tempbuf = pwd_len;
-		strncpy(tempbuf, password, pwd_len);
+		strncpy((char*)tempbuf, password, pwd_len);
+
+		for(uint8_t Iter = 0; Iter < 10; ++Iter)
+		{
+			Io->printf(" %02X, ", sending_temp_buffer[Iter]);
+		}
+		Io->print("\r\n");
 
 		// send to queue
-		xQueueSend(CliToIpcQueue, sending_temp_buffer, 100);
+		IpcCom.cpy(sending_temp_buffer, totalSize);
 		delete[] sending_temp_buffer;
+
+		if(IPC_Taskhandle != NULL)
+		{
+			xTaskNotify(
+				IPC_Taskhandle,
+				1 << 2,
+				eSetBits
+			);
+		}
 	}
 
 	void remove_wifi(InterfaceIO *Io, const char*)
@@ -168,6 +183,8 @@ namespace WiFi
 		{.command = "add_wifi", 	.handler = add_wifi, 	.description = "add new wifi with password"},
 		{.command = "remove_wifi", 	.handler = remove_wifi, .description = "remove a wifi credential"},
 	};
+
+	constexpr uint8_t TotalCommands = sizeof(wifiSubCommands)/sizeof(wifiSubCommands[0]);
 
 	void list(InterfaceIO *Io, const char*)
 	{
@@ -388,7 +405,29 @@ void cpu_monitor(InterfaceIO *IO, const char* arguments)
 
 void wifi_handler(InterfaceIO *IO, const char* arguments)
 {
+	using namespace WiFi;
 
+	for(uint8_t Iter = 0; Iter < TotalCommands; ++Iter)
+	{
+		const size_t CmdLen = strlen(wifiSubCommands[Iter].command);
+
+		if (strncasecmp(wifiSubCommands[Iter].command, arguments + 1, CmdLen) == 0)
+		{
+			IO->print("Got command \r\n");
+			if (wifiSubCommands[Iter].handler != NULL)
+			{
+				const char *Arguments =
+						(arguments[CmdLen] == NULL_CHAR) ?
+								NULL : strchr(arguments, ' ');
+				wifiSubCommands[Iter].handler(IO, Arguments);
+			}
+			else
+			{
+				IO->print("Not handled\r\n");
+			}
+			break;
+		}
+	}
 }
 
 void mqtt_cmd_handler(InterfaceIO *IO, const char* arguments)

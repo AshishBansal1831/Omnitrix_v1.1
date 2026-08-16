@@ -4,6 +4,7 @@
 #include <LittleFS.h>
 
 #include "wifi_activity.hpp"
+#include "command_handler.h"
 
 #define GPIO_READ_PIN D1
 
@@ -242,40 +243,35 @@ void mqtt_handler()
 
             client.loop();
 
-            // Publish queue, receive queue etc.
-
             break;
         }
     }
 }
 
-uint8_t littlefs_handler(const uint8_t *data, uint16_t length)
+/*
+    @function : littlefs_handler
+    @description : handle configuration related commands from the slave
+
+*/
+uint8_t littlefs_handler(Packet &packet)
 {
-    if(data == nullptr || length == 0)
-    {
-        return false;
-    }
-
-    ConfigCommand cmd = static_cast<ConfigCommand>(data[0]);
-
-    switch(cmd)
+    switch(packet.PacketID)
     {
         //------------------------------------------------------
-        case ConfigCommand::ADD_WIFI_CREDENTIAL:
+        case packet_type_t::ADD_WIFI_CREDENTIAL:
         {
+            Serial.print("Inside ADD_WIFI_CREDENTITAL\r\n");
+
             if(configurations.StoredCreds >= MAX_WIFI_CREDENTIALS)
             {
                 return false;
             }
 
-            if(length != 1 + sizeof(configurations.WifiCredentials[0]))
-            {
-                return false;
-            }
+
 
             memcpy(
                 &configurations.WifiCredentials[configurations.StoredCreds],
-                &data[1],
+                packet.Payload,
                 sizeof(configurations.WifiCredentials[0]));
 
             configurations.StoredCreds++;
@@ -284,12 +280,9 @@ uint8_t littlefs_handler(const uint8_t *data, uint16_t length)
         }
 
         //------------------------------------------------------
-        case ConfigCommand::REMOVE_WIFI_CREDENTIAL:
+        case packet_type_t::REMOVE_WIFI_CREDENTIAL:
         {
-            if(length != 2)
-                return false;
-
-            uint8_t index = data[1];
+            uint8_t index = packet.Payload[0];
 
             if(index >= configurations.StoredCreds)
                 return false;
@@ -309,31 +302,22 @@ uint8_t littlefs_handler(const uint8_t *data, uint16_t length)
         }
 
         //------------------------------------------------------
-        case ConfigCommand::SET_ACTIVE_WIFI:
+        case packet_type_t::SET_ACTIVE_WIFI:
         {
-            if(length != 2)
+            if(packet.Payload[0] >= configurations.StoredCreds)
                 return false;
 
-            if(data[1] >= configurations.StoredCreds)
-                return false;
-
-            configurations.ActiveWifiIndex = data[1];
+            configurations.ActiveWifiIndex = packet.Payload[0];
 
             break;
         }
 
         //------------------------------------------------------
-        case ConfigCommand::ADD_MQTT_BROKER:
+        case packet_type_t::ADD_MQTT_BROKER:
         {
-            if(configurations.StoredBrokers >= MAX_MQTT_BROKERS_LIST)
-                return false;
-
-            if(length != 1 + sizeof(MQTTBroker))
-                return false;
-
             memcpy(
                 &configurations.MqttBrokers[configurations.StoredBrokers],
-                &data[1],
+                packet.Payload,
                 sizeof(MQTTBroker));
 
             configurations.StoredBrokers++;
@@ -342,12 +326,9 @@ uint8_t littlefs_handler(const uint8_t *data, uint16_t length)
         }
 
         //------------------------------------------------------
-        case ConfigCommand::REMOVE_MQTT_BROKER:
+        case packet_type_t::REMOVE_MQTT_BROKER:
         {
-            if(length != 2)
-                return false;
-
-            uint8_t index = data[1];
+            uint8_t index = packet.Payload[0];
 
             if(index >= configurations.StoredBrokers)
                 return false;
@@ -367,43 +348,33 @@ uint8_t littlefs_handler(const uint8_t *data, uint16_t length)
         }
 
         //------------------------------------------------------
-        case ConfigCommand::SET_ACTIVE_BROKER:
+        case packet_type_t::SET_ACTIVE_BROKER:
         {
-            if(length != 2)
+            if(packet.Payload[0] >= configurations.StoredBrokers)
                 return false;
 
-            if(data[1] >= configurations.StoredBrokers)
-                return false;
-
-            configurations.ActiveBrokerIndex = data[1];
+            configurations.ActiveBrokerIndex = packet.Payload[0];
 
             break;
         }
 
         //------------------------------------------------------
-        case ConfigCommand::SET_DEBUG_PORT:
+        case packet_type_t::SET_DEBUG_PORT:
         {
-            if(length != 2)
-                return false;
-
-            configurations.DebugPort = data[1];
+            configurations.DebugPort = packet.Payload[0];
 
             break;
         }
 
         //------------------------------------------------------
-        case ConfigCommand::SET_DEBUG_MASK:
+        case packet_type_t::SET_DEBUG_MASK:
         {
-            if(length != 2)
-                return false;
-
-            configurations.DebugMask = data[1];
-
+            configurations.DebugMask = packet.Payload[0];
             break;
         }
 
         //------------------------------------------------------
-        case ConfigCommand::SAVE_CONFIGURATION:
+        case packet_type_t::SAVE_CONFIGURATION:
         {
             File file = LittleFS.open(ConfigFileName, "w");
 
@@ -420,7 +391,7 @@ uint8_t littlefs_handler(const uint8_t *data, uint16_t length)
         }
 
         //------------------------------------------------------
-        case ConfigCommand::LOAD_CONFIGURATION:
+        case packet_type_t::LOAD_CONFIGURATION:
         {
             File file = LittleFS.open(ConfigFileName, "r");
 
@@ -437,7 +408,7 @@ uint8_t littlefs_handler(const uint8_t *data, uint16_t length)
         }
 
         //------------------------------------------------------
-        case ConfigCommand::FACTORY_RESET:
+        case packet_type_t::FACTORY_RESET:
         {
             memset(&configurations, 0, sizeof(configurations));
             break;

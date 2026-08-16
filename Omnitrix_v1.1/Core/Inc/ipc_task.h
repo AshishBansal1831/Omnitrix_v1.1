@@ -9,8 +9,9 @@
 #define INC_IPC_TASK_H_
 
 #include <stdint.h>
+#include "cpp_mutex.hpp"
 
-constexpr uint8_t MAX_BUFFER_SZIE = 64;
+constexpr uint8_t MAX_BUFFER_SIZE = 64;
 
 enum IpcID : uint8_t
 {
@@ -33,6 +34,14 @@ struct manage_dma_tx
 {
 	uint8_t *active_buf;
 	uint16_t recv_length;
+};
+
+struct IpcQueueCom
+{
+	uint8_t buffer[64];
+	FreeRtosMutex mutx;
+
+	void cpy(uint8_t data[], uint8_t len);
 };
 
 

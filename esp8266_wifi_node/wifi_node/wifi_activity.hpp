@@ -20,24 +20,6 @@ enum class SequenceError
   MQTT_NOT_CONNECTED
 };
 
-enum class ConfigCommand : uint8_t
-{
-    ADD_WIFI_CREDENTIAL = 0,
-    REMOVE_WIFI_CREDENTIAL,
-    SET_ACTIVE_WIFI,
-
-    ADD_MQTT_BROKER,
-    REMOVE_MQTT_BROKER,
-    SET_ACTIVE_BROKER,
-
-    SET_DEBUG_PORT,
-    SET_DEBUG_MASK,
-
-    SAVE_CONFIGURATION,
-    LOAD_CONFIGURATION,
-    FACTORY_RESET
-};
-
 struct MQTTBroker
 {
     char name[16];

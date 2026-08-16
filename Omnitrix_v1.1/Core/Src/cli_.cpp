@@ -17,7 +17,7 @@ void CmdLineInterface::command_handler()
 {
 	while(1)
 	{
-		CmdLen = IO->get_string_input(ReceivedCmd, sizeof(ReceivedCmd));
+		CmdLen = IO->get_string_input(ReceivedCmd, sizeof(ReceivedCmd), ">>>> ");
 
 	    if(CmdLen == 0) // <! User just pressed enter without any input
 	    {

@@ -756,8 +756,6 @@ extern "C" void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 	if (hspi->Instance == SPI1) // Match your display SPI instance
 	{
-
-
 		if (xGuiTaskHandle != NULL)
 		{
 			// Use xTaskNotifyFromISR to match xTaskNotifyWait

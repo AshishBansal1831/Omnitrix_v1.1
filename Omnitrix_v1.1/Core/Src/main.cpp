@@ -141,7 +141,6 @@ int main(void) {
 
 	// 3. Now it is completely safe to create your queues
 	User_Uart_Queue = xQueueCreate(50, sizeof(char));
-	CliToIpcQueue = xQueueCreate(120, sizeof(char));
 
 	UartPort.init(User_Uart_Queue);
 	UartPort.print("hello\r\n");

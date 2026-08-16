@@ -56,8 +56,7 @@ public:
 			printn(print_buffer, static_cast<size_t>(written));
 		}
 	}
-
-	size_t get_string_input(char *, size_t);
+	size_t get_string_input(char *ReceivedCmd, size_t buf_size, const char *tag = nullptr);
 };
 
 class UartIO : public InterfaceIO
