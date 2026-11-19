@@ -748,7 +748,9 @@ void GC9A01A::dma_send(uint8_t *buf, uint32_t bytes)
     HAL_SPI_Transmit_DMA(&Handle, buf, bytes);
     // returns immediately — callback clears dma_busy
 }
-
+extern void set_esp_ready(bool active);
+extern volatile bool is_tx_pending;
+extern size_t spi_tx_len;
 
 extern "C" void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
 {
@@ -770,18 +772,15 @@ extern "C" void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
 		// Context switch inside the ISR if the GUI task has a higher priority than the interrupted task
 		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 	}
-	else if(hspi->Instance == SPI2)
-	{
-		if(IPC_Taskhandle != NULL)
-		{
-			xTaskNotifyFromISR(
-					xGuiTaskHandle,
-					0x01,               // Set Bit 0
-					eSetBits,
-					&xHigherPriorityTaskWoken
-			);
-		}
-	}
+	else if (hspi->Instance == SPI2)
+    {
+        // Transfer complete: Clear flag and lower READY line
+        is_tx_pending = false;
+        spi_tx_len = 0;
+
+        set_esp_ready(false);
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
 #else
     // Called by DMA IRQ when transfer complete
     dma_busy = 0;

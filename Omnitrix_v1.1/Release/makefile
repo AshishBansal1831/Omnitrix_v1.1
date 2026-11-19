@@ -88,6 +88,12 @@ default.size.stdout \
 OBJDUMP_LIST += \
 Omnitrix_v1.1.list \
 
+OBJCOPY_HEX += \
+Omnitrix_v1.1.hex \
+
+OBJCOPY_BIN += \
+Omnitrix_v1.1.bin \
+
 
 # All Target
 all: main-build
@@ -111,12 +117,22 @@ Omnitrix_v1.1.list: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
 	@echo 'Finished building: $@'
 	@echo ' '
 
+Omnitrix_v1.1.hex: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-objcopy  -O ihex $(EXECUTABLES) "Omnitrix_v1.1.hex"
+	@echo 'Finished building: $@'
+	@echo ' '
+
+Omnitrix_v1.1.bin: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-objcopy  -O binary $(EXECUTABLES) "Omnitrix_v1.1.bin"
+	@echo 'Finished building: $@'
+	@echo ' '
+
 # Other Targets
 clean:
-	-$(RM) Omnitrix_v1.1.elf Omnitrix_v1.1.list Omnitrix_v1.1.map default.size.stdout
+	-$(RM) Omnitrix_v1.1.bin Omnitrix_v1.1.elf Omnitrix_v1.1.hex Omnitrix_v1.1.list Omnitrix_v1.1.map default.size.stdout
 	-@echo ' '
 
-secondary-outputs: $(SIZE_OUTPUT) $(OBJDUMP_LIST)
+secondary-outputs: $(SIZE_OUTPUT) $(OBJDUMP_LIST) $(OBJCOPY_HEX) $(OBJCOPY_BIN)
 
 fail-specified-linker-script-missing:
 	@echo 'Error: Cannot find the specified linker script. Check the linker settings in the build configuration.'

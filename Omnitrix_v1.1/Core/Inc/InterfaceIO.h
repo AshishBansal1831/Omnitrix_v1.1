@@ -23,7 +23,6 @@ class InterfaceIO
 {
 protected:
 	QueueHandle_t Queue;
-//	SemaphoreHandle_t RxSem; // Data Receive  Semaphore
 
 public:
 

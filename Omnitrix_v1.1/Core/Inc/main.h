@@ -92,16 +92,14 @@ enum SpecialChar_t : uint8_t
 	NULL_CHAR	= '\0',
 };
 
-struct Time
-{
-	uint8_t Day;
-	uint8_t Month;
-	uint16_t Year;
-
-	uint8_t Hour;
-	uint8_t Min;
-	uint8_t Sec;
-	uint16_t MilliSecond;
+struct __attribute__((packed, aligned(4))) Time {
+    uint16_t Year;     // e.g., 2026
+    uint8_t  Month;    // 1 - 12
+    uint8_t  Day;      // 1 - 31
+    uint8_t  Hour;    // 0 - 23
+    uint8_t  Min;  // 0 - 59
+    uint8_t  Sec;  // 0 - 59
+    uint32_t epoch;    // Unix Timestamp (4 bytes)
 };
 void set_time(const uint32_t Time); // as got from the wifi module
 void set_date(const uint32_t Date); // ddmmyyyy

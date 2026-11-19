@@ -29,19 +29,29 @@ enum IpcID : uint8_t
 	MQTT_REMOVE
 };
 
-
-struct manage_dma_tx
+enum IpcTask_Notify_Mask : uint8_t
 {
-	uint8_t *active_buf;
-	uint16_t recv_length;
+	CLI_TO_IPC_NOTIFY = 1 << 0,
+
 };
+
+// Define an IPC Message Envelope
+struct IpcMessage
+{
+    IpcID id;
+    uint8_t length;
+    uint8_t payload[64]; // Fixed inline storage (no heap/pointers needed!)
+};
+
 
 struct IpcQueueCom
 {
 	uint8_t buffer[64];
+	uint16_t Length;
 	FreeRtosMutex mutx;
 
-	void cpy(uint8_t data[], uint8_t len);
+	void cpy_from(uint8_t data[], uint8_t len);
+	uint16_t  cpy_to(uint8_t data[]);
 };
 
 

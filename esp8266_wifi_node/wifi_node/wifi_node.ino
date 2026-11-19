@@ -59,13 +59,11 @@ void IRAM_ATTR onTimer() {
     sendPending = true;
 }
 
-void send_spi_packet(Packet *packet)
+void send_spi_packet(uint8_t *buffer, uint16_t Len )
 {
-    if(packet == nullptr) return;
-    uint8_t *buffer_ptr = (uint8_t *)(packet);
-    for (size_t i = 0; i < sizeof(packet); i++, buffer_ptr++) 
+    for (size_t i = 0; i < Len; i++, buffer++) 
     {
-        SPI.transfer(*(buffer_ptr++));
+        SPI.transfer(*buffer);
     }
 }
 
@@ -138,6 +136,7 @@ void spi_handler()
 
     uint8_t PacketNo = 1;
     uint8_t TotalPacket = 1;
+    Packet packet;
 
     check_cmd_status_t cmd_status; 
 
@@ -148,8 +147,8 @@ void spi_handler()
 
             if(digitalRead(D1) == HIGH)
             {                
-                Packet send_packet(packet_type_t::REQUEST, 1U, 1U, empty_buffer);
-                send_spi_packet(&send_packet);
+                // Packet send_packet(packet_type_t::REQUEST, 1U, 1U, empty_buffer);
+                // send_spi_packet(&send_packet);
             }
 
             state = State::RECEIVE_HEADER;
@@ -158,7 +157,7 @@ void spi_handler()
 
         //-----------------------------------------------------
         case State::RECEIVE_HEADER:
-            cmd_status = check_cmd(spi_receive_byte()); 
+            cmd_status = packet.check_cmd(spi_receive_byte()); 
             if ( cmd_status == check_cmd_status_t::RECV_PKT)
             {                
                 state = State::PROCESS_PACKET;
@@ -186,6 +185,8 @@ void sendSpiTimePacket()
     time_t now = time(nullptr);
     struct tm timeinfo;
     localtime_r(&now, &timeinfo);
+    uint8_t buffer[120];
+    u16_t Len = 0;
 
     // Populate packet structure
     cur_time.year     = (uint16_t)(timeinfo.tm_year + 1900);
@@ -196,7 +197,8 @@ void sendSpiTimePacket()
     cur_time.seconds  = (uint8_t)timeinfo.tm_sec;
     cur_time.epoch    = (uint32_t)now;
 
-    Packet time_pkt(packet_type_t::TIME_DATE_DATA, 1U, 1U, (uint8_t*)&cur_time);
+    Packet time_pkt;
+    Len = time_pkt.create_packet(packet_type_t::TIME_DATE_DATA, (uint8_t*)&cur_time, sizeof(cur_time), buffer);
 
-    send_spi_packet(&time_pkt);
+    send_spi_packet(buffer, Len);
 }

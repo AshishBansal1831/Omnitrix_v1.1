@@ -22,8 +22,11 @@
 #include "gpio.h"
 
 /* USER CODE BEGIN 0 */
+#include "spi.h"
 #include "FreeRTOS.h"
 #include "task.h"
+
+extern uint8_t *dma_ipc_rx_active_buf;
 /* USER CODE END 0 */
 
 /*----------------------------------------------------------------------------*/
@@ -32,6 +35,7 @@
 /* USER CODE BEGIN 1 */
 extern TaskHandle_t xGuiTaskHandle;
 extern TaskHandle_t IPC_Taskhandle;
+extern uint8_t SpiRxByte;
 /* USER CODE END 1 */
 
 /** Configure pins as
@@ -148,12 +152,9 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 			&xHigherPriorityTaskWoken
 		);
 		break;
+
     case ESP_CS_Pin:
-    	xTaskNotifyFromISR (IPC_Taskhandle,
-			0x00,
-			eSetBits,
-			&xHigherPriorityTaskWoken
-		);
+    	HAL_SPI_Receive_IT(&hspi2, &SpiRxByte, sizeof(SpiRxByte));
     	break;
     }
 

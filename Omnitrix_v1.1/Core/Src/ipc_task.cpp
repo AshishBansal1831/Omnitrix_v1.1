@@ -20,10 +20,22 @@
 #define NOTIFY_BIT_BUF1_READY  (1UL << 0)
 #define NOTIFY_BIT_BUF2_READY  (1UL << 1)
 
-void IpcQueueCom::cpy(uint8_t data[], uint8_t len)
+constexpr uint8_t FRAME_SIZE = 64;
+
+void IpcQueueCom::cpy_from(uint8_t data[], uint8_t len)
 {
 	std::lock_guard<FreeRtosMutex> lock(mutx);
+	Length = len;
 	memcpy(buffer, data, len);
+}
+
+uint16_t IpcQueueCom::cpy_to(uint8_t data[])
+{
+	std::lock_guard<FreeRtosMutex> lock(mutx);
+	uint16_t read_len = Length;
+	Length = 0;
+	memcpy(data, buffer, read_len);
+	return read_len;
 }
 
 extern UartIO UartPort;
@@ -31,6 +43,7 @@ extern UartIO UartPort;
 // Task & Queue Handles
 TaskHandle_t IPC_Taskhandle = NULL;
 volatile QueueHandle_t CliToIpcQueue = NULL;
+volatile QueueHandle_t SpiRxIntToIpcQueue = NULL;
 
 IpcQueueCom IpcCom;
 
@@ -40,8 +53,6 @@ alignas(4) uint8_t dma_ipc_rx_buffer2[sizeof(Packet)];
 
 uint8_t *dma_ipc_rx_active_buf = dma_ipc_rx_buffer1;
 
-
-
 struct CliToIpcData
 {
     IpcID Id;
@@ -49,98 +60,166 @@ struct CliToIpcData
     uint8_t *payload;
 };
 
+uint8_t SpiRxByte = 0;
+
+static uint8_t spi_tx_buffer[FRAME_SIZE];
+static uint8_t spi_rx_buffer[FRAME_SIZE];
+size_t spi_tx_len = 0;
+volatile bool is_tx_pending = false;
+static const uint8_t dummy_tx_buffer[FRAME_SIZE] = {0};
+
+static void decode_packet(Packet &packet);
+bool send_payload(packet_type_t type, const uint8_t *payload, uint8_t len);
+
+void set_esp_ready(bool active) {
+    HAL_GPIO_WritePin(ESP_READY_GPIO_Port, ESP_READY_Pin,
+                      active ? GPIO_PIN_SET : GPIO_PIN_RESET);
+}
+
+extern Time local_time;
+extern FreeRtosMutex timeMutex;
+
 void ipc_task(void *)
 {
     IPC_Taskhandle = xTaskGetCurrentTaskHandle();
 
-    // Use safe thread-local stack memory instead of dynamic 'new'
-    static uint8_t *local_recv_buffer;
-    CliToIpcData Data;
-    uint32_t ulNotificationValue = 0;
+    IpcMessage cli_msg;
+    uint8_t spi_byte = 0;
+    Packet recv_spi_pkt;
 
-    Packet* pkt = nullptr;
-    IpcCom.mutx.init();
+    SpiRxIntToIpcQueue = xQueueCreate(64, sizeof(char));
+    CliToIpcQueue = xQueueCreate(2, sizeof(IpcMessage));
 
-    // Start initial SPI DMA Receive
-    HAL_SPI_Receive_DMA(&hspi2, dma_ipc_rx_buffer1, sizeof(Packet));
+    // Start listening for SPI
 
     while(1)
     {
-        // 2. Wait for SPI Interrupts or CLI Queue (Max 10ms block time)
-        if(xTaskNotifyWait(0x00, ULONG_MAX, &ulNotificationValue, pdMS_TO_TICKS(10)) == pdPASS)
+        // -------------------------------------------------------------
+        // 1. Process Pending CLI Messages from Queue (Non-blocking)
+        // -------------------------------------------------------------
+        if (CliToIpcQueue != NULL && xQueueReceive(CliToIpcQueue, &cli_msg, 0) == pdPASS)
         {
-        	pkt = nullptr;
-            // Process Buffer 1
-            if(ulNotificationValue & NOTIFY_BIT_BUF1_READY)
+            UartPort.printf("IPC Recv Cmd ID: %d, Len: %d\r\n", cli_msg.id, cli_msg.length);
+
+            switch(cli_msg.id)
             {
-                pkt = reinterpret_cast<Packet*>(dma_ipc_rx_buffer1);
+                case IpcID::WIFI_ADD:
+                    send_payload(packet_type_t::ADD_WIFI_CREDENTIAL, cli_msg.payload, cli_msg.length);
+                    break;
+
+                default:
+                    break;
             }
-            else if(ulNotificationValue & NOTIFY_BIT_BUF2_READY)
-            {
-                pkt = reinterpret_cast<Packet*>(dma_ipc_rx_buffer2);
-            }
-            else if(ulNotificationValue & (1 << 2))
-            {
-            	local_recv_buffer = IpcCom.buffer;
-            	Data.Id  	 = static_cast<IpcID>(local_recv_buffer[0]);
-				Data.Size 	 = local_recv_buffer[1];
-				Data.payload = local_recv_buffer + 2;
+        }
 
-				UartPort.printf("ID : %d Size : %d\r\n", Data.Id, Data.Size);
-
-				switch(Data.Id)
-				{
-					case IpcID::WIFI_ADD:
-						send_payload(packet_type_t::ADD_WIFI_CREDENTIAL, Data.payload, Data.Size);
-						break;
-
-					default:
-						break;
-				}
-            }
-
-
-            if(pkt != nullptr)
-            {
-
-            }
+        // -------------------------------------------------------------
+        // 2. Process Incoming SPI Bytes from ISR Queue (10ms wait block)
+        // -------------------------------------------------------------
+        if (SpiRxIntToIpcQueue != NULL && xQueueReceive(SpiRxIntToIpcQueue, &spi_byte, pdMS_TO_TICKS(10)) == pdPASS)
+        {
+            // Feed byte to state machine parser
+        	if(recv_spi_pkt.check_cmd(spi_byte) == check_cmd_status_t::RECV_PKT)
+        	{
+        		decode_packet(recv_spi_pkt);
+        	}
         }
     }
 }
 
+// Prepares the hardware and signals the Master
+bool send_payload(packet_type_t type, const uint8_t *payload, uint8_t len)
+{
+    if (is_tx_pending) {
+        return false; // Busy sending previous frame
+    }
+
+    // 1. Clear and format the frame
+    memset(spi_tx_buffer, 0, sizeof(spi_tx_buffer));
+    spi_tx_buffer[0] = 0xA5; // Sync Byte 1
+    spi_tx_buffer[1] = 0x5A; // Sync Byte 2
+    spi_tx_buffer[2] = static_cast<uint8_t>(type);
+    spi_tx_buffer[3] = len;
+
+    if (payload && len > 0) {
+        memcpy(&spi_tx_buffer[4], payload, len);
+    }
+
+    is_tx_pending = true;
+
+    // 2. Pre-load SPI peripheral buffer BEFORE pulling pin HIGH
+    HAL_SPI_TransmitReceive_IT(&hspi2, spi_tx_buffer, spi_rx_buffer, sizeof(spi_tx_buffer));
+
+    // 3. Signal the ESP8266: "Hardware is loaded, clock out 64 bytes!"
+    set_esp_ready(true);
+
+    return true;
+}
+
+
 extern "C" void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
 {
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-
+	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     if(hspi->Instance == SPI2)
     {
-        uint32_t notify_bit = 0;
-
-        if(dma_ipc_rx_active_buf == dma_ipc_rx_buffer1)
-        {
-            notify_bit = NOTIFY_BIT_BUF1_READY;
-            dma_ipc_rx_active_buf = dma_ipc_rx_buffer2; // Swap to Buffer 2
-        }
-        else
-        {
-            notify_bit = NOTIFY_BIT_BUF2_READY;
-            dma_ipc_rx_active_buf = dma_ipc_rx_buffer1; // Swap to Buffer 1
-        }
-
-        // Restart DMA immediately on the idle buffer
-        HAL_SPI_Receive_DMA(hspi, dma_ipc_rx_active_buf, sizeof(Packet));
-
-        // Notify IPC task of completed buffer
-        if(IPC_Taskhandle != NULL)
-        {
-            xTaskNotifyFromISR(
-                IPC_Taskhandle,
-                notify_bit,
-                eSetBits,
-                &xHigherPriorityTaskWoken
-            );
-
-            portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-        }
+    	xQueueSendFromISR(SpiRxIntToIpcQueue, &SpiRxByte, &xHigherPriorityTaskWoken);
+    	HAL_SPI_Receive_IT(&hspi2, &SpiRxByte, sizeof(SpiRxByte));
     }
+}
+
+
+extern "C" void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
+{
+    if (hspi->Instance == SPI2)
+    {
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+        // 1. Lower READY line
+        set_esp_ready(false);
+        is_tx_pending = false;
+
+        // 2. If valid packet header received from ESP, queue it for processing
+		xQueueSendFromISR(SpiRxIntToIpcQueue, spi_rx_buffer, &xHigherPriorityTaskWoken);
+
+        // 3. Re-arm idle listener for the next transaction
+        HAL_SPI_TransmitReceive_IT(&hspi2, (uint8_t*)dummy_tx_buffer, spi_rx_buffer, FRAME_SIZE);
+
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+}
+
+static void decode_packet(Packet &packet)
+{
+	switch(packet.PacketID)
+	{
+	case packet_type_t::REQUEST:
+		if(packet.Payload[0] == 0)
+		{
+			// send the apyload created
+		}
+		break;
+
+	case packet_type_t::ACK:
+		if(packet.Payload[0] == 1)
+		{
+			// Notify the cli_task that ACK has been received
+			break;
+		}
+
+	case packet_type_t::HEARTBEAT :
+		{
+			// set global status flag
+			// for now use the mutex
+			break;
+		}
+	case packet_type_t::TIME_DATE_DATA :
+		{
+			std::lock_guard<FreeRtosMutex> lock(timeMutex);
+			memcpy(&local_time, packet.Payload, sizeof(local_time));
+		}
+		break;
+
+
+	default:
+		break;
+	}
 }

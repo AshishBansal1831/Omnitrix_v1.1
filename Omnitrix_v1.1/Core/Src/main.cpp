@@ -143,7 +143,6 @@ int main(void) {
 	User_Uart_Queue = xQueueCreate(50, sizeof(char));
 
 	UartPort.init(User_Uart_Queue);
-	UartPort.print("hello\r\n");
 
 	// 4. Create your C++ tasks
 	xTaskCreate(cli_task, "Uart CLI Task", 700, &UartPort,

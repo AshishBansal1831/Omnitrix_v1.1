@@ -14,19 +14,16 @@
 extern "C" {
 #endif
 
-#define PAYLOAD_MAX_LENGTH	50
-#define PAYLOAD_SIZE	18U
-
-constexpr uint8_t TOTAL_SPI_PACKT_SIZE = 24U; // 0xA5 0x5A PacketNo, TOtalPackets, PacketID, 18Bytes Payload
+typedef uint8_t crc_t;
+constexpr uint8_t PAYLOAD_MAX_LENGTH = 128U;
 
 enum class packet_type_t : uint8_t
 {
     // --- 0x00 - 0x0F: System & Protocol Management ---
     NOP                     = 0x00, // Safe default / Uninitialized / Dummy byte
     ACK                     = 0x01, // Positive Acknowledgment
-    NACK                    = 0x02, // Negative Acknowledgment / Error
-    REQUEST                 = 0x03, // Generic Data or State Request
-    HEARTBEAT               = 0x04, // Link Keep-Alive
+    REQUEST                 = 0x02, // Generic Data or State Request
+    HEARTBEAT               = 0x03, // Link Keep-Alive
 
     // --- 0x10 - 0x2F: Telemetry & Real-Time Data ---
     TIME_DATE_DATA          = 0x10, // Timestamp / Sync Packet
@@ -70,26 +67,34 @@ enum class check_cmd_status_t
 	ERROR,
 };
 
+enum class cmd_decode_state_t
+{
+    HEADER, // 2Bytes
+    LENGTH,
+    PACKET_ID, // 1 Byte
+    PAYLOAD,
+    CALC_CRC,
+};
+
 
 struct Packet
 {
-	const uint8_t Header[2] = {0xA5, 0x5A}; // Default initialization
-	uint8_t Pkt_No    = 0;
-	uint8_t Totalno   = 1;
-	enum packet_type_t PacketID;
+    uint16_t Length;
+    uint16_t NoBytes;
+    uint16_t Index;
+    crc_t calculated_crc;
+
+    cmd_decode_state_t Decode_state = cmd_decode_state_t::HEADER;
+
+	packet_type_t PacketID;
 	uint8_t Payload[PAYLOAD_MAX_LENGTH] {};
 
-	Packet() {} ;
-	Packet (const packet_type_t Type, uint8_t pkt_no, uint8_t total_no, const uint8_t* src_payload) {
-		Create(Type, pkt_no, total_no, src_payload);
-	}
-	void Create (const packet_type_t Type, uint8_t pkt_no, uint8_t total_no, const uint8_t* src_payload);
+    check_cmd_status_t check_cmd(const uint8_t Recv);
+    uint16_t create_packet(const packet_type_t pkt_type, uint8_t payload[], uint16_t Length, uint8_t *out_buff);
+    crc_t calc_crc(const uint8_t *buffer, size_t Len);
 };
 
-uint16_t make_packet(uint8_t *payload, uint16_t length);
-check_cmd_status_t check_cmd(Packet *SpiPayload);
-void process_data();
-void send_payload(const packet_type_t type, uint8_t *Payload, const uint8_t TotalLength);
+
 #ifdef __cplusplus
 }
 #endif

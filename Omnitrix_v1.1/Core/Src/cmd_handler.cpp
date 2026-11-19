@@ -9,6 +9,7 @@
 #include <stddef.h>
 #include <string.h>
 #include "spi.h"
+#include "gpio.h"
 
 #include "cmd_handler.h"
 
@@ -19,34 +20,14 @@ extern UartIO UartPort;
 
 #endif
 
-
 typedef uint8_t crc_t;
-
-enum class cmd_decode_state_t
-{
-    HEADER, // 2Bytes
-	PKT_NO, // current packet no
-	T_PKT_NO, // total packets in this epoch
-    PACKET_ID, // 1 Byte
-    PACKET_SUB_ID,
-    PAYLOAD,
-    CRC_CHECK,
-};
-
-void Packet::Create(const packet_type_t Type, const uint8_t pkt_no, const uint8_t total_no, const uint8_t* src_payload)
-{
-	PacketID = Type;
-	Pkt_No  = pkt_no;
-	Totalno = total_no;
-	memcpy(Payload, src_payload, PAYLOAD_MAX_LENGTH);
-}
 
 Packet G_Packets;
 uint8_t cmd_payload_buffer[sizeof(Packet)];
 uint8_t cmd_out_buffer[sizeof(Packet)];
 size_t cmd_index;
 
-crc_t calc_crc(const uint8_t *buffer, size_t Len)
+crc_t Packet::calc_crc(const uint8_t *buffer, size_t Len)
 {
     crc_t Crc = 0;
     for(size_t Iter = 0; Iter < Len; ++Iter)
@@ -57,32 +38,99 @@ crc_t calc_crc(const uint8_t *buffer, size_t Len)
     return Crc;
 }
 
-void send_payload(const packet_type_t type, uint8_t *Payload, const uint8_t TotalLength)
+/*
+    returns
+*/
+check_cmd_status_t Packet::check_cmd(const uint8_t Recv)
 {
-	Packet SendPacket;
-	const uint8_t TotalPackets = TotalLength / PAYLOAD_MAX_LENGTH;
-	uint8_t PacketCount = 0;
-	UartPort.printf("total packet %d\r\n", TotalPackets);
-	do
-	{
-		SendPacket.Create(type, PacketCount, TotalPackets, Payload);
-		HAL_SPI_Transmit(&hspi2, (uint8_t *)(&SendPacket) , sizeof(SendPacket), 100);
-		UartPort.printf("Sent packet %d\r\n", PacketCount);
-	}while(PacketCount < TotalPackets);
+    check_cmd_status_t ret_status = check_cmd_status_t::NO_CMD;
+
+#ifdef DEBUG
+   static cmd_decode_state_t prev_state = HEADER;
+   if(prev_state != this->Decode_state)
+   {
+       printf("Decode_state - %d\r\n", this->Decode_state);
+       prev_state = this->Decode_state;
+   }
+#endif
+
+    switch(Decode_state)
+    {
+        case cmd_decode_state_t::HEADER:
+            if(this->NoBytes == 0 && Recv == 0xA5)
+            {
+                this->NoBytes++;
+            }
+            else if(this->NoBytes == 1 && Recv == 0x5A)
+            {
+                Decode_state = cmd_decode_state_t::LENGTH;
+                this->Length = 0;
+                this->NoBytes = 0;
+                this->calculated_crc = 0;
+            }
+            else
+            {
+                ret_status = check_cmd_status_t::NO_CMD;
+            }
+            break;
+
+        case cmd_decode_state_t::LENGTH: // only payloads length.
+            this->calculated_crc ^= Recv;
+            this->Length = Recv | this->Length << (this->NoBytes * 8);
+            this->NoBytes++;
+            if(this->NoBytes == 2)
+            {
+                this->Decode_state = cmd_decode_state_t::PACKET_ID;
+            }
+            break;
+
+        case cmd_decode_state_t::PACKET_ID:
+            this->calculated_crc ^= Recv;
+            this->PacketID = static_cast<packet_type_t>(Recv);
+            this->Decode_state = cmd_decode_state_t::PAYLOAD;
+            this->Index = 0;
+
+            break;
+
+        case cmd_decode_state_t::PAYLOAD:
+            this->calculated_crc ^= Recv;
+            this->Payload[Index++] = Recv;
+            if(this->Index >= this->Length)
+            {
+                this->Decode_state = cmd_decode_state_t::CALC_CRC;
+            }
+            break;
+
+        case cmd_decode_state_t::CALC_CRC:
+            if(this->calculated_crc == Recv)
+            {
+                ret_status = check_cmd_status_t::RECV_PKT;
+            }
+            break;
+
+        default:
+            break;
+    }
+
+    return ret_status;
+}
+/*
+    Return length of final packet
+*/
+uint16_t Packet::create_packet(const packet_type_t pkt_type, uint8_t payload[], uint16_t Length, uint8_t *out_buff)
+{
+    uint16_t Index = 5;
+    out_buff[0] = 0xA5;
+    out_buff[1] = 0x5A;
+    out_buff[2] = (uint8_t)pkt_type;
+
+    memcpy(out_buff + Index, payload, Length);
+    Index += Length;
+    out_buff[3] = Index & 0xFF;
+    out_buff[4] = (Index >> 8) & 0xFF;
+
+    out_buff[Index] = this->calc_crc(out_buff + 2, Index);
+
+    return Index;
 }
 
-check_cmd_status_t check_cmd(Packet *SpiPayload)
-{
-	if(	SpiPayload->Header[0] != 0xA5 ||
-		SpiPayload->Header[1] != 0x5A)
-	{
-		return check_cmd_status_t::NO_CMD;
-	}
-
-	if(SpiPayload->Pkt_No > SpiPayload->Totalno)
-	{
-		return check_cmd_status_t::ERROR;
-	}
-
-	return check_cmd_status_t::RECV_PKT;
-}

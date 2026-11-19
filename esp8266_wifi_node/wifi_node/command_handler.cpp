@@ -4,16 +4,7 @@
 
 #include "command_handler.h"
 
-typedef uint8_t crc_t;
 
-enum class CMD_DECODE_STATE 
-{
-    HEADER, // 2Bytes
-    PACKET_NO,
-    TOTAL_PACKETS,
-    PACKET_ID, // 1 Byte
-    PAYLOAD,
-};
 
 
 Packet G_Packets;
@@ -24,7 +15,7 @@ size_t cmd_index;
 
 uint8_t littlefs_handler(Packet &packet);
 
-crc_t calc_crc(const uint8_t *buffer, size_t Len)
+crc_t Packet::calc_crc(const uint8_t *buffer, size_t Len)
 {
     crc_t Crc = 0;
     for(int Iter = 0; Iter < Len; ++Iter)
@@ -39,35 +30,36 @@ crc_t calc_crc(const uint8_t *buffer, size_t Len)
 /*
     returns
 */
-check_cmd_status_t check_cmd(const uint8_t Recv)
+check_cmd_status_t Packet::check_cmd(const uint8_t Recv)
 {
     check_cmd_status_t ret_status = check_cmd_status_t::SOME_PACKET;
-    static CMD_DECODE_STATE Decode_state = CMD_DECODE_STATE::HEADER;
+    
     static size_t Index = 0;
     static uint16_t NumOfBytes = 0;
-    Packet *packet = &G_Packets;
     
 #ifdef DEBUG
-   static CMD_DECODE_STATE prev_state = HEADER;
-   if(prev_state != Decode_state)
+   static cmd_decode_state_t prev_state = HEADER;
+   if(prev_state != this->Decode_state)
    {
-       printf("Decode_state - %d\r\n", Decode_state);
-       prev_state = Decode_state;
+       printf("Decode_state - %d\r\n", this->Decode_state);
+       prev_state = this->Decode_state;
    }
 #endif
 
     switch(Decode_state)
     {
-        case CMD_DECODE_STATE::HEADER:
-            if(NumOfBytes == 0 && Recv == 0xA5)
+        case cmd_decode_state_t::HEADER:
+            if(this->NoBytes == 0 && Recv == 0xA5)
             {
-                NumOfBytes++;
+                this->NoBytes++;
             }
-            else if(NumOfBytes == 1 && Recv == 0x5A)
+            else if(this->NoBytes == 1 && Recv == 0x5A)
             {
-                Decode_state = CMD_DECODE_STATE::PACKET_NO;
-                Index = 0;
-                NumOfBytes = 0;
+                Decode_state = cmd_decode_state_t::LENGTH;
+                this->Length = 0;
+                this->Index = 0;
+                this->NoBytes = 0;
+                this->calculated_crc = 0;
             }
             else
             {
@@ -75,29 +67,37 @@ check_cmd_status_t check_cmd(const uint8_t Recv)
             }
             break;
         
-        case CMD_DECODE_STATE::PACKET_NO:
-            packet->Pkt_No = Recv;
-            Decode_state = CMD_DECODE_STATE::TOTAL_PACKETS;
+        case cmd_decode_state_t::LENGTH: // only payloads length.
+            this->calculated_crc ^= Recv;
+            this->Length = Recv | this->Length << (this->Index * 8);
+            if(this->Index == 2)
+            {                
+                this->Decode_state = cmd_decode_state_t::PACKET_ID;
+            }
             break;
         
-        case CMD_DECODE_STATE::TOTAL_PACKETS:
-            packet->Totalno = Recv;
-            Decode_state = CMD_DECODE_STATE::PACKET_ID;
-            break;
-        
-        case CMD_DECODE_STATE::PACKET_ID:
-            packet->PacketID = static_cast<packet_type_t>(Recv);
-            Decode_state = CMD_DECODE_STATE::PAYLOAD;
-            NumOfBytes = 0;
-            Index = 0;
+        case cmd_decode_state_t::PACKET_ID:
+            this->calculated_crc ^= Recv;
+            this->PacketID = static_cast<packet_type_t>(Recv);
+            this->Decode_state = cmd_decode_state_t::PAYLOAD;
+            this->NoBytes = 0;
+            this->Index = 0;
+            
             break;
 
-        case CMD_DECODE_STATE::PAYLOAD:
-            packet->Payload[Index++] = Recv;
-            if(Index >= PAYLOAD_MAX_LENGTH)
+        case cmd_decode_state_t::PAYLOAD:
+            this->calculated_crc ^= Recv;
+            this->Payload[Index++] = Recv;
+            if(this->Index >= this->Length)
             {
-                Decode_state = CMD_DECODE_STATE::HEADER;
-                ret_status = check_cmd_status_t::RECV_PKT;
+                this->Decode_state = cmd_decode_state_t::CALC_CRC;
+            }
+            break;
+
+        case cmd_decode_state_t::CALC_CRC:
+            if(this->calculated_crc == Recv)
+            {
+                ret_status = check_cmd_status_t::RECV_PKT; 
             }
             break;
 
@@ -107,11 +107,32 @@ check_cmd_status_t check_cmd(const uint8_t Recv)
 
     return ret_status;
 }
+/*
+    Return length of final packet
+*/
+uint16_t Packet::create_packet(const packet_type_t pkt_type, uint8_t payload[], uint16_t Length, uint8_t *out_buff)
+{
+    uint16_t Index = 5;
+    uint8_t crc = 0;
+    out_buff[0] = 0xA5;
+    out_buff[1] = 0x5A;
+    out_buff[2] = (uint8_t)pkt_type;
+
+    memcpy(out_buff + Index, payload, Length);
+    Index += Length;
+    out_buff[3] = Index & 0xFF;
+    out_buff[4] = (Index >> 8) & 0xFF;
+
+    out_buff[Index] = this->calc_crc(out_buff + 2, Index);
+
+    return Index;
+}
 
 static void process_request_packet(const Packet *packet)
 {
     /* STM32 requesting data from ESP or vice versa */
     // send the specific data using make packet function
+    
 }
 
 static void process_ack_packet(const Packet *packet)

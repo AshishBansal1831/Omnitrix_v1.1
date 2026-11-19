@@ -87,58 +87,31 @@ namespace WiFi
 
 	void add_wifi(InterfaceIO *Io, const char*)
 	{
-		uint8_t *tempbuf = nullptr;
-		char ssid[30] = {0};
-		char password[30] = {0};
+	    char ssid[30] = {0};
+	    char password[30] = {0};
 
-		const size_t ssid_len = Io->get_string_input(ssid, sizeof(ssid), "Enter SSID : ");
-		const size_t pwd_len = Io->get_string_input(password, sizeof(password), "Enter Password : ");
-		// send this data to the mdule to add to list
-		// Queue format IPC ID, ssid buffer len, ssid, passowrd buffer len, password
-		const size_t totalSize = 1 + 1 + ssid_len + 1 + pwd_len;
-		uint8_t *sending_temp_buffer = new uint8_t[totalSize];
-		Io->printf("totalsize - %d\r\n", totalSize);
-		if(sending_temp_buffer == nullptr)
-		{
-			Io->print("Couldn't get the heap buffer");
-			return;
-		}
+	    const size_t ssid_len = Io->get_string_input(ssid, sizeof(ssid), "Enter SSID : ");
+	    const size_t pwd_len  = Io->get_string_input(password, sizeof(password), "Enter Password : ");
 
-		tempbuf = sending_temp_buffer;
+	    IpcMessage msg;
+	    msg.id = IpcID::WIFI_ADD;
 
-		*tempbuf = IpcID::WIFI_ADD;
-		tempbuf++;
+	    // Format payload cleanly inside message
+	    uint8_t *ptr = msg.payload;
+	    *ptr++ = static_cast<uint8_t>(ssid_len);
+	    memcpy(ptr, ssid, ssid_len);
+	    ptr += ssid_len;
 
-		*tempbuf = totalSize;
-		tempbuf++;
+	    *ptr++ = static_cast<uint8_t>(pwd_len);
+	    memcpy(ptr, password, pwd_len);
 
-		*tempbuf = ssid_len;
-		tempbuf++;
+	    msg.length = static_cast<uint8_t>(ptr - msg.payload);
 
-		strncpy((char*)tempbuf, ssid, ssid_len);
-		tempbuf += ssid_len;
-
-		*tempbuf = pwd_len;
-		strncpy((char*)tempbuf, password, pwd_len);
-
-		for(uint8_t Iter = 0; Iter < 10; ++Iter)
-		{
-			Io->printf(" %02X, ", sending_temp_buffer[Iter]);
-		}
-		Io->print("\r\n");
-
-		// send to queue
-		IpcCom.cpy(sending_temp_buffer, totalSize);
-		delete[] sending_temp_buffer;
-
-		if(IPC_Taskhandle != NULL)
-		{
-			xTaskNotify(
-				IPC_Taskhandle,
-				1 << 2,
-				eSetBits
-			);
-		}
+	    // Push to FreeRTOS Queue (Thread-safe, non-blocking if queue full)
+	    if (xQueueSend(CliToIpcQueue, &msg, pdMS_TO_TICKS(100)) != pdPASS)
+	    {
+	        Io->print("Error: IPC Queue Full!\r\n");
+	    }
 	}
 
 	void remove_wifi(InterfaceIO *Io, const char*)
