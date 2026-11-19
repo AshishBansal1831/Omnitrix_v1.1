@@ -50,6 +50,14 @@ static const uint8_t font_5x7_A[] = {
     0b10001  // #   #
 };
 
+static inline uint8_t get_2bit_pixel(const uint8_t *buf, uint16_t width, uint16_t x, uint16_t y)
+{
+    uint32_t row_bytes = (width + 3U) / 4U;
+    uint8_t byte_val = buf[(uint32_t)y * row_bytes + (x / 4U)];
+    uint8_t shift = (uint8_t)(6U - 2U * (x % 4U));
+    return (uint8_t)((byte_val >> shift) & 0x03U);
+}
+
 void GC9A01A::init()
 {
     rst_high(); HAL_Delay(10);
@@ -703,6 +711,53 @@ void GC9A01A::draw_bitmap_1bit(
     }
 
     // Ensure the very last row transmission finishes before pulling CS high
+    dma_wait();
+    cs_high();
+}
+
+
+void GC9A01A::draw_bitmap_2bit(
+    uint16_t x, uint16_t y,
+    const uint8_t *bitmap,
+    uint16_t w, uint16_t h,
+    const uint16_t palette[4])   // 4 RGB565 entries for 2-bit values 0..3
+{
+    if (bitmap == nullptr || palette == nullptr || w == 0 || h == 0) {
+        return;
+    }
+    if ((uint32_t)w * 2U > DMA_BUF_BYTES) {
+        return;
+    }
+
+    cs_low();
+    set_window(x, y, (uint16_t)(x + w - 1U), (uint16_t)(y + h - 1U));
+    begin_write();
+
+    uint8_t buf_idx = 0;
+
+    for (uint16_t row = 0; row < h; row++) {
+        // Wait until the previous transfer finishes before reusing a buffer
+        if (row > 0) {
+            dma_wait();
+        }
+
+        uint16_t *ptr = reinterpret_cast<uint16_t *>(dma_buf[buf_idx]);
+
+        for (uint16_t col = 0; col < w; col++) {
+            uint8_t idx = get_2bit_pixel(bitmap, w, col, row) & 0x03U;
+            uint16_t color = palette[idx];
+            // Swap bytes here if your GC9A01A SPI driver sends raw uint16_t little-endian
+            *ptr++ = color;
+        }
+
+#ifndef FREERTOS
+        dma_busy = true;
+#endif
+        HAL_SPI_Transmit_DMA(&Handle, dma_buf[buf_idx], (uint16_t)(w * 2U));
+
+        buf_idx ^= 1U;
+    }
+
     dma_wait();
     cs_high();
 }

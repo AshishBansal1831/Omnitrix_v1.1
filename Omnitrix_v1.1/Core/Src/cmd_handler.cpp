@@ -46,7 +46,7 @@ check_cmd_status_t Packet::check_cmd(const uint8_t Recv)
     check_cmd_status_t ret_status = check_cmd_status_t::NO_CMD;
 
 #ifdef DEBUG
-   static cmd_decode_state_t prev_state = HEADER;
+   static cmd_decode_state_t prev_state = cmd_decode_state_t::HEADER;
    if(prev_state != this->Decode_state)
    {
        printf("Decode_state - %d\r\n", this->Decode_state);

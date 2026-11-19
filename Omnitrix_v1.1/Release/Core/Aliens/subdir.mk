@@ -5,28 +5,13 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
-../Core/Aliens/cannon_bolt.c \
-../Core/Aliens/fourarms.c \
-../Core/Aliens/grey_matter_bmp.c \
-../Core/Aliens/heatblast.c \
-../Core/Aliens/omnitrix.c \
-../Core/Aliens/xlr8_bitmap.c 
+../Core/Aliens/omnitrix.c 
 
 C_DEPS += \
-./Core/Aliens/cannon_bolt.d \
-./Core/Aliens/fourarms.d \
-./Core/Aliens/grey_matter_bmp.d \
-./Core/Aliens/heatblast.d \
-./Core/Aliens/omnitrix.d \
-./Core/Aliens/xlr8_bitmap.d 
+./Core/Aliens/omnitrix.d 
 
 OBJS += \
-./Core/Aliens/cannon_bolt.o \
-./Core/Aliens/fourarms.o \
-./Core/Aliens/grey_matter_bmp.o \
-./Core/Aliens/heatblast.o \
-./Core/Aliens/omnitrix.o \
-./Core/Aliens/xlr8_bitmap.o 
+./Core/Aliens/omnitrix.o 
 
 
 # Each subdirectory must supply rules for building sources it contributes
@@ -36,7 +21,7 @@ Core/Aliens/%.o Core/Aliens/%.su Core/Aliens/%.cyclo: ../Core/Aliens/%.c Core/Al
 clean: clean-Core-2f-Aliens
 
 clean-Core-2f-Aliens:
-	-$(RM) ./Core/Aliens/cannon_bolt.cyclo ./Core/Aliens/cannon_bolt.d ./Core/Aliens/cannon_bolt.o ./Core/Aliens/cannon_bolt.su ./Core/Aliens/fourarms.cyclo ./Core/Aliens/fourarms.d ./Core/Aliens/fourarms.o ./Core/Aliens/fourarms.su ./Core/Aliens/grey_matter_bmp.cyclo ./Core/Aliens/grey_matter_bmp.d ./Core/Aliens/grey_matter_bmp.o ./Core/Aliens/grey_matter_bmp.su ./Core/Aliens/heatblast.cyclo ./Core/Aliens/heatblast.d ./Core/Aliens/heatblast.o ./Core/Aliens/heatblast.su ./Core/Aliens/omnitrix.cyclo ./Core/Aliens/omnitrix.d ./Core/Aliens/omnitrix.o ./Core/Aliens/omnitrix.su ./Core/Aliens/xlr8_bitmap.cyclo ./Core/Aliens/xlr8_bitmap.d ./Core/Aliens/xlr8_bitmap.o ./Core/Aliens/xlr8_bitmap.su
+	-$(RM) ./Core/Aliens/omnitrix.cyclo ./Core/Aliens/omnitrix.d ./Core/Aliens/omnitrix.o ./Core/Aliens/omnitrix.su
 
 .PHONY: clean-Core-2f-Aliens
 

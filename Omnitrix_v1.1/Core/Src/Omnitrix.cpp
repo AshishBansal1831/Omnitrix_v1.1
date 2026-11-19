@@ -10,7 +10,26 @@
 #include "gc9a01a_spi.hpp"
 #include "gpio.h"
 #include "omnitrix_anim.h"
-
+#include "alien_4_arms_2bit.h"
+#include "ben_mummyf6v_2bit.h"
+#include "ben_wolf_2bit.h"
+#include "benvictor_2bit.h"
+#include "cannon_bolt_2bit.h"
+#include "diamond_headf7h_2bit.h"
+#include "dittof7o_2bit.h"
+#include "eye_guyf7w_2bit.h"
+#include "ghostfreak_2bit.h"
+#include "grey_matter_2bit.h"
+#include "heatblast_2bit.h"
+#include "ripjaw_2bit.h"
+#include "stink_flyf9g_2bit.h"
+#include "upchuckf9n_2bit.h"
+#include "upgradef9r_2bit.h"
+#include "way_big_2bit.h"
+#include "wild_mut_2bit.h"
+#include "wild_vine_2bit.h"
+#include "xlzr8_2bit.h"
+#include "omnitrix_2bit.h"
 //#define FREERTOS
 
 #ifdef FREERTOS
@@ -26,21 +45,67 @@
 #endif
 
 extern GC9A01A tft;
-extern const uint8_t cannon_bolt[];
-extern const uint8_t grey_matter[];
-extern const uint8_t fourarms[];
-extern const uint8_t heatblast[];
-extern const uint8_t xlzr8[];
-extern const uint8_t omnitrix_data[];
+//extern const uint8_t omnitrix_data[];
 
 const uint8_t* const AlienSchDisplay[] =
 {
-	heatblast,
-	grey_matter,
-	cannon_bolt,
-	fourarms,
-	xlzr8,
+	heatblast_2bit_map,
+	alien_4_arms_2bit_map,
+	xlzr8_2bit_map,
+	diamond_headf7h_2bit_map,
+	grey_matter_2bit_map,
+	way_big_2bit_map,
+//	ben_mummyf6v_2bit_map,
+//	ben_wolf_2bit_map,
+//	benvictor_2bit_map,
+	cannon_bolt_2bit_map,
+	dittof7o_2bit_map,
+	eye_guyf7w_2bit_map,
+	ghostfreak_2bit_map,
+	ripjaw_2bit_map,
+//	stink_flyf9g_2bit_map,
+	upchuckf9n_2bit_map,
+	upgradef9r_2bit_map,
+	wild_mut_2bit_map,
+//	wild_vine_2bit_map,
 };
+
+#define ALIEN_SCH_DISPLAY_COUNT (sizeof(AlienSchDisplay) / sizeof(AlienSchDisplay[0]))
+
+/* Map 2-bit values 0..3 to your display's native pixel format (e.g., RGB565) */
+//static const uint16_t palette_rgb565[4] = {
+//    0x0000U, /* 0: Black      */
+//    0x4208U, /* 1: Dark Grey  */
+//    0xA514U, /* 2: Light Grey */
+//    0x07E0U, /* 3: Green      */
+//};
+
+static inline uint16_t swap_u16(uint16_t c)
+{
+    return (uint16_t)((c >> 8) | (c << 8));
+}
+
+// Pre-swap your 4 palette entries once before calling draw_bitmap_2bit:
+uint16_t palette_rgb565[4] = {
+    swap_u16(0x0000U), // 0: Black
+    swap_u16(0x4208U), // 1: Dark Grey
+    swap_u16(0xA514U), // 2: Light Grey
+    swap_u16(0x07E0U), // 3: Green
+};
+
+/* Classic Omnitrix palette for indices 0..3:
+ *   0: Black
+ *   1: Grey
+ *   2: Light Grey
+ *   3: Green
+ */
+const uint16_t omnitrix_classic_palette[4] = {
+	swap_u16(0x0000U), /* 0: Black      */
+	swap_u16(0x7BEFU), /* 1: Grey       */
+	swap_u16(0xC618U), /* 2: Light Grey */
+	swap_u16(0x07E0U), /* 3: Green      */
+};
+
 constexpr uint16_t SoftwareDebounceDelay = 100;
 constexpr uint8_t MaxLoopCnt = 5;
 UserInput Input = UserInput::NONE;
@@ -112,7 +177,7 @@ void handleOmniWatch()
 	{
 	case States::CHANGE_TO_NORMAL_SCREEN :
 		// Display the symbol and move to IDLE state
-		tft.draw_bitmap_1bit(0, 0, omnitrix_data, 240, 240, 0x00, GreenClr);
+		tft.draw_bitmap_2bit(0, 0,  omnitrix_2bit_map , 240,240,omnitrix_classic_palette);//GreenClr);
 		CurrentState = States::IDLE;
 		break;
 
@@ -126,7 +191,7 @@ void handleOmniWatch()
 		break;
 
 	case States::ACTIVATING:
-//		tft.draw_bitmap_1bit(0, 0, omnitrix_data, 240, 240, 0x00, GreenClr);
+//		tft.draw_bitmap_2bit(0, 0,  omnitrix_2bit_map , 240,240,omnitrix_classic_palette);//GreenClr);
 		tft.fill_screen(GreenClr);
 		DisplayDelay(500);
 		// Loop through each frame of the animation
@@ -175,7 +240,7 @@ void handleOmniWatch()
 		case UserInput::ACTION:  // Intentional Blank
 			break;
 		}
-		tft.draw_bitmap_1bit(0, 0, AlienSchDisplay[CurrentAlienCntr], 240, 240, GreenClr, 0x00);
+		tft.draw_bitmap_2bit(0, 0, AlienSchDisplay[CurrentAlienCntr], 240, 240, palette_rgb565);
 		Input = UserInput::NONE;
 		CurrentState = States::HANLDE_INPUT;
 		break;
@@ -213,22 +278,29 @@ void handleOmniWatch()
 		break;
 
 	case States::HANDLE_ALIENS:
-		tft.fill_screen(GC9A01A::rgb565(0, 0, 25));
-		DisplayDelay(1000); // 10 seconds hold
-		CurrentState = States::DISCHARGING;
+		tft.draw_bitmap_2bit(0, 0,  omnitrix_2bit_map , 240,240,omnitrix_classic_palette);//WhiteClr);
+		PinRead = GpioInput();
+//		CurrentState = States::DISCHARGING;
+		if(PinRead & 1 << ACTIVITY_SET)
+		{
+			DisplayDelay(SoftwareDebounceDelay);
+			FlushGpioNotifications();
+			CurrentState = States::DISCHARGING;
+			break;
+		}
 		break;
 
 	case States::DISCHARGING:
 		for(uint8_t Iter = 0; Iter < MaxLoopCnt; ++Iter)
 		{
-			tft.draw_bitmap_1bit(0, 0, omnitrix_data, 240, 240, 0x00, WhiteClr);
-			DisplayDelay(200);
-			tft.draw_bitmap_1bit(0, 0, omnitrix_data, 240, 240, 0x00, RedClr);
-			DisplayDelay(200);
+			tft.draw_bitmap_2bit(0, 0,  omnitrix_2bit_map , 240,240,omnitrix_classic_palette);//WhiteClr);
+			DisplayDelay(500);
+			tft.draw_bitmap_2bit(0, 0,  omnitrix_2bit_map , 240,240,omnitrix_classic_palette);//RedClr);
+			DisplayDelay(500);
 		}
 		tft.fill_screen(RedClr);
-		DisplayDelay(250);
-		tft.draw_bitmap_1bit(0, 0, omnitrix_data, 240, 240, 0x00, RedClr);
+		DisplayDelay(1500);
+		tft.draw_bitmap_2bit(0, 0,  omnitrix_2bit_map , 240,240,omnitrix_classic_palette);//RedClr);
 		CurrentState = States::RECHARGING;
 		break;
 

@@ -225,6 +225,12 @@ public:
     	    uint16_t fg_color,   // alien color
     	    uint16_t bg_color);   // background color
 
+    void draw_bitmap_2bit(
+		uint16_t x, uint16_t y,
+		const uint8_t *bitmap,
+		uint16_t w, uint16_t h,
+		const uint16_t palette[4]);   // 4 RGB565 entries for 2-bit values 0..3
+
     inline void dma_wait();
     void dma_send(uint8_t *buf, uint32_t bytes);
     void draw_omnitrix_growth_frame(const uint8_t row_bounds[240], uint16_t triangle_color, uint16_t bg_color);
